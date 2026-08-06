@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "present",
+  "displayName": "Present",
+  "description": "Author a narrated presentation and publish it to a shareable watch URL that plays anywhere. Narration is generated on your own machine.",
+  "version": "1.0.0",
+  "author": { "name": "Bisque" },
+  "homepage": "https://bisque.today",
+  "keywords": ["presentations", "slides", "video", "narration", "bisque"]
+}
