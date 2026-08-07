@@ -1,15 +1,14 @@
-# present
+# presenter
 
-An [Agent Skill](https://code.claude.com/docs/en/skills) that builds a
-**narrated presentation** and publishes it to a shareable watch URL on
-[bisque.today](https://bisque.today). You describe it, your agent authors it,
-your machine narrates it, Bisque hosts it.
-
-Works in **Claude Code**, **Gemini CLI**, and **Codex CLI**, on macOS, Linux
-and Windows.
-
-Narration is synthesized on your own machine — **free and unlimited**. Nothing
+Bisque's open-source **Agent Skills** for building narrated presentations you
+publish to a shareable watch URL on [bisque.today](https://bisque.today).
+Narration is synthesized on your own machine — **free and unlimited**; nothing
 is billed per word.
+
+The collection ships one skill today, **`present`**: you describe a
+presentation, your agent authors it, your machine narrates it, and Bisque hosts
+it. It works in **Claude Code**, **Gemini CLI**, and **Codex CLI**, on macOS,
+Linux, and Windows.
 
 ## How it works
 
@@ -37,53 +36,37 @@ is a living document, not a one-shot render.
 
 ## Install
 
-The skill is a plain directory; installing is putting it where your agent
-looks.
-
-### Claude Code
+Add the `present` skill from this collection with the
+[`skills`](https://www.npmjs.com/package/skills) CLI:
 
 ```sh
-git clone https://github.com/bisque-cloud/present ~/.claude/skills/present
+npx skills add bisque-cloud/presenter
+```
+
+It copies the skill into your agent's skills directory — `~/.claude/skills/`
+for Claude Code, `~/.agents/skills/` for Codex and Gemini. Then ask for a
+presentation, or invoke it directly with `/present`.
+
+### Manual install
+
+Each skill is a plain directory; installing one is putting it where your agent
+looks. Clone the collection and copy the `present` skill:
+
+```sh
+git clone https://github.com/bisque-cloud/presenter
+cp -r presenter/skills/present ~/.claude/skills/present   # Claude Code
+cp -r presenter/skills/present ~/.agents/skills/present   # Codex + Gemini
 ```
 
 ```powershell
-git clone https://github.com/bisque-cloud/present $env:USERPROFILE\.claude\skills\present
+git clone https://github.com/bisque-cloud/presenter
+Copy-Item -Recurse presenter\skills\present $env:USERPROFILE\.claude\skills\present
 ```
 
-Then ask for a presentation, or invoke it directly with `/present`.
-
-### Codex CLI
-
-```sh
-git clone https://github.com/bisque-cloud/present ~/.agents/skills/present
-```
-
-```powershell
-git clone https://github.com/bisque-cloud/present $env:USERPROFILE\.agents\skills\present
-```
-
-Invoke with `$present` or let it activate on description match. Codex
-CLI doesn't include Node — install Node 18+ (or bun) alongside it.
-
-### Gemini CLI
-
-```sh
-gemini skills install https://github.com/bisque-cloud/present --scope user
-```
-
-Gemini CLI also reads `~/.agents/skills/`, so the Codex clone above covers it
-too. First activation shows a one-time consent prompt naming the skill and its
-directory — that's Gemini's standard skill UX, not a warning.
-
-### All three on one machine
-
-Clone once into `~/.agents/skills/present` (covers Codex and Gemini),
-then symlink it for Claude Code, which does not yet read the shared location
-([anthropics/claude-code#31005](https://github.com/anthropics/claude-code/issues/31005)):
-
-```sh
-ln -s ~/.agents/skills/present ~/.claude/skills/present
-```
+Invoke with `/present` (Claude Code), `$present` (Codex), or let it activate on
+description match. Gemini CLI also reads `~/.agents/skills/`, so the Codex copy
+covers it too. Codex CLI doesn't include Node — install Node 18+ (or bun)
+alongside it.
 
 ## Requirements
 
@@ -153,7 +136,7 @@ silence (on macOS, retry with `--device cpu`).
 
 Beyond that, a failed publish is usually no Node on the machine (Codex CLI),
 no network approval (Codex sandbox), or not signed in. For anything else,
-[open an issue](https://github.com/bisque-cloud/present/issues) with what you
+[open an issue](https://github.com/bisque-cloud/presenter/issues) with what you
 ran and what happened — the sentence that misbehaved, if narration sounded
 wrong.
 

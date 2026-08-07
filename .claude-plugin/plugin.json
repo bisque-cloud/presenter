@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
-  "name": "present",
-  "displayName": "Present",
-  "description": "Author a narrated presentation and publish it to a shareable watch URL that plays anywhere. Narration is generated on your own machine.",
+  "name": "presenter",
+  "displayName": "Presenter",
+  "description": "Bisque's open-source skills for building narrated presentations you publish to a shareable watch URL. Includes the present skill; narration is generated on your own machine.",
   "version": "1.0.0",
   "author": { "name": "Bisque" },
   "homepage": "https://bisque.today",

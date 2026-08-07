@@ -2,7 +2,7 @@
 
 Thanks for wanting to make `/present` better.
 
-- **Found a bug?** [Open an issue](https://github.com/bisque-cloud/present/issues) with what you ran, what happened, and your
+- **Found a bug?** [Open an issue](https://github.com/bisque-cloud/presenter/issues) with what you ran, what happened, and your
   OS + agent (Claude Code, Gemini CLI, Codex). If narration sounded wrong,
   the sentence that misbehaved is the single most useful thing you can give
   us.
