@@ -110,18 +110,81 @@ function scanMarkers(raw) {
   return out;
 }
 
-/** Drops tags WITHOUT inserting whitespace — `a<br>b` is one word, both here
- *  and on the server. Inserting a space here would add a token and get the
- *  publish rejected. */
+/** Tags that end a run of text, so `a<br>b` is two words rather than "ab".
+ *  MUST stay identical to TEXT_BOUNDARY_TAGS in
+ *  packages/presentation-format/src/html-build.ts: the server counts words the
+ *  same way, and a disagreement gets the publish rejected. Inline tags are
+ *  deliberately absent so `<em>word</em>s` stays one word. */
+const TEXT_BOUNDARY_TAGS = new Set([
+  "br",
+  "hr",
+  "p",
+  "div",
+  "section",
+  "article",
+  "aside",
+  "header",
+  "footer",
+  "main",
+  "nav",
+  "figure",
+  "figcaption",
+  "blockquote",
+  "pre",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "ul",
+  "ol",
+  "li",
+  "dl",
+  "dt",
+  "dd",
+  "table",
+  "thead",
+  "tbody",
+  "tfoot",
+  "tr",
+  "td",
+  "th",
+  "caption",
+]);
+
+function isTextBoundaryTag(tagBody) {
+  const m = tagBody.match(/^\/?\s*([a-zA-Z][a-zA-Z0-9]*)/);
+  return m !== null && TEXT_BOUNDARY_TAGS.has(m[1].toLowerCase());
+}
+
 function stripTags(input) {
   let out = "";
   let inTag = false;
+  let tagBody = "";
   for (const ch of input) {
-    if (ch === "<") inTag = true;
-    else if (ch === ">") inTag = false;
-    else if (!inTag) out += ch;
+    if (ch === "<") {
+      inTag = true;
+      tagBody = "";
+    } else if (ch === ">") {
+      inTag = false;
+      if (isTextBoundaryTag(tagBody)) out += " ";
+    } else if (inTag) {
+      tagBody += ch;
+    } else {
+      out += ch;
+    }
   }
   return out;
+}
+
+/** Narration is authored inside indented HTML, so the raw text carries
+ *  newlines and long indent runs, and a removed cue marker leaves its
+ *  surrounding spaces behind. Speech engines read those as pauses, which is
+ *  heard as halting narration. Collapsing cannot change the word count, so
+ *  client and server stay in agreement. */
+function collapseWhitespace(input) {
+  return input.replace(/\s+/g, " ").trim();
 }
 
 function decodeEntities(s) {
@@ -167,7 +230,7 @@ function narrationOf(section) {
     stripTags(scanMarkers(section.slice(afterOpen, closeOffset))),
   ).trim();
   if (trimmed === "") return "";
-  return dropSentinels(trimmed);
+  return collapseWhitespace(dropSentinels(trimmed));
 }
 
 function slideKeyFor(i) {
@@ -513,7 +576,9 @@ async function ensureCloneVoiceReady(bin, flags, auth, me) {
     throw error;
   }
   if (typeof ref?.wavBase64 !== "string" || typeof ref?.passage !== "string") {
-    fail("The account's voice-clone recording came back malformed — re-record it at https://bisque.cloud/welcome.");
+    fail(
+      "The account's voice-clone recording came back malformed — re-record it at https://bisque.cloud/welcome.",
+    );
   }
 
   const sourceId =
@@ -540,7 +605,8 @@ async function ensureCloneVoiceReady(bin, flags, auth, me) {
     ];
     if (manifestProvenance) args.push("--source-id", sourceId);
     const res = spawnSync(bin, args, { stdio: "inherit" });
-    if (res.error) fail(`could not run bisque-voice clone: ${res.error.message}`);
+    if (res.error)
+      fail(`could not run bisque-voice clone: ${res.error.message}`);
     if (res.status !== 0) fail(`bisque-voice clone exited ${res.status}`);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -1227,7 +1293,9 @@ async function cmdLogin(flags = {}) {
   // `--profile`; without it here, a multi-account machine could resolve a
   // profile it had no way to create.
   const profileName =
-    typeof flags.profile === "string" && flags.profile ? flags.profile : "present";
+    typeof flags.profile === "string" && flags.profile
+      ? flags.profile
+      : "present";
   const machineProfile = gatherMachineProfile();
   const start = await api("/api/create-cli-session", {
     body: {
