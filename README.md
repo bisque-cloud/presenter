@@ -5,10 +5,11 @@ publish to a shareable watch URL on [bisque.today](https://bisque.today).
 Narration is synthesized on your own machine — **free and unlimited**; nothing
 is billed per word.
 
-The collection ships one skill today, **`present`**: you describe a
+The collection ships two skills. **`present`** is the main one: you describe a
 presentation, your agent authors it, your machine narrates it, and Bisque hosts
 it. It works in **Claude Code**, **Gemini CLI**, and **Codex CLI**, on macOS,
-Linux, and Windows.
+Linux, and Windows. **`video`** turns any published presentation into an MP4 you
+can upload; it runs on macOS.
 
 ## How it works
 
@@ -34,28 +35,41 @@ Change a slide and ask it to publish again, and only that slide is
 re-synthesized — an HTML-only edit costs no synthesis at all. The presentation
 is a living document, not a one-shot render.
 
+## Turning it into a video
+
+Ask for an MP4 and the `video` skill takes over from the watch URL:
+
+> Render that as a vertical video I can post.
+
+It downloads the presentation and the narration you already published, draws
+every frame with the same player the watch page uses, and writes an MP4 —
+landscape, square, or vertical for Shorts, Reels and TikTok. Nothing is
+re-narrated, so the video sounds exactly like the watch URL.
+
+Rendering takes about as long as the presentation runs, and it needs macOS.
+
 ## Install
 
-Add the `present` skill from this collection with the
-[`skills`](https://www.npmjs.com/package/skills) CLI:
+Add the skills with the [`skills`](https://www.npmjs.com/package/skills) CLI:
 
 ```sh
 npx skills add bisque-cloud/presenter
 ```
 
-It copies the skill into your agent's skills directory — `~/.claude/skills/`
-for Claude Code, `~/.agents/skills/` for Codex and Gemini. Then ask for a
+It copies them into your agent's skills directory — `~/.claude/skills/` for
+Claude Code, `~/.agents/skills/` for Codex and Gemini. Then ask for a
 presentation, or invoke it directly with `/present`.
 
 ### Manual install
 
 Each skill is a plain directory; installing one is putting it where your agent
-looks. Clone the collection and copy the `present` skill:
+looks. Clone the collection and copy the skills you want:
 
 ```sh
 git clone https://github.com/bisque-cloud/presenter
 cp -r presenter/skills/present ~/.claude/skills/present   # Claude Code
 cp -r presenter/skills/present ~/.agents/skills/present   # Codex + Gemini
+cp -r presenter/skills/video   ~/.claude/skills/video     # optional, macOS
 ```
 
 ```powershell
@@ -77,13 +91,13 @@ alongside it.
   agent shows you the catalogue and you pick. These are large — pick with your
   disk and memory in mind.
 
-  | Voice | Download | Peak memory, model only |
-  | ----- | -------- | ----------------------- |
-  | Small and fast — nine languages, exact word timings | 337 MB | not measured |
-  | Nine ready-made voices, ten languages | 1.26 GB + 1.05 GB aligner | not measured |
-  | Clone your own voice, ten languages | 1.28 GB + 1.05 GB aligner | ~4.9 GB |
-  | Nine ready-made voices, larger model | 2.33 GB + 1.05 GB aligner | ~5.7 GB |
-  | Clone your own voice, larger model | 2.37 GB + 1.05 GB aligner | ~5.7 GB |
+  | Voice                                               | Download                  | Peak memory, model only |
+  | --------------------------------------------------- | ------------------------- | ----------------------- |
+  | Small and fast — nine languages, exact word timings | 337 MB                    | not measured            |
+  | Nine ready-made voices, ten languages               | 1.26 GB + 1.05 GB aligner | not measured            |
+  | Clone your own voice, ten languages                 | 1.28 GB + 1.05 GB aligner | ~4.9 GB                 |
+  | Nine ready-made voices, larger model                | 2.33 GB + 1.05 GB aligner | ~5.7 GB                 |
+  | Clone your own voice, larger model                  | 2.37 GB + 1.05 GB aligner | ~5.7 GB                 |
 
   The four larger voices narrate with measured word timings, so each installs a
   forced aligner alongside itself — that is the second number, and it is one
@@ -94,11 +108,15 @@ alongside it.
   The small fast voice needs an extra pronunciation pack per non-English
   language — under a megabyte for most, 49 MB for Japanese — downloaded the
   first time you narrate in that language.
+
 - **A Bisque account**, for publishing. During its first machine check the
   agent walks you through browser sign-in, then asks you to claim a **public
   handle** — presentations are published under it. Both happen before it writes
   any slides. Your first handle can never be renamed or released, so pick one
   you are happy to keep; additional handles can be added at bisque.cloud.
+- **A Mac, for `video`.** It downloads `bisque-video` (~15 MB) on first use, and
+  an ffmpeg (~12 MB) if the machine has none — a Homebrew ffmpeg already there
+  is used as-is. `present` needs none of this.
 
 ## Limitations
 
@@ -120,6 +138,12 @@ alongside it.
 - **Codex CLI's default sandbox restricts network.** Installing, signing in,
   and publishing will surface approval prompts under default sandbox
   settings.
+- **Video rendering is macOS-only, and it is not instant.** A render takes about
+  as long as the presentation runs — every frame is drawn and snapshotted. On
+  Linux or Windows there is no MP4, but the watch URL plays in any browser.
+- **A video needs the presentation to be public or unlisted.** `video` fetches
+  it by URL like any viewer does, so a private presentation cannot be rendered
+  from another machine.
 - **Intel Macs cannot run the small fast voice, or any aligner.** Both are
   built on a runtime that dropped Intel macOS. The four larger voices — both
   ready-made-speaker models and both cloning models — all work, so an Intel
@@ -133,6 +157,9 @@ voices, credentials, account, handle — and synthesizes a test word to prove
 audio actually works, which catches the common failures before a publish does:
 no voice installed, no handle claimed, or a voice that runs but produces
 silence (on macOS, retry with `--device cpu`).
+
+For `video`, run `~/.bisque/bin/bisque-video doctor` — it reports the ffmpeg it will encode
+with, where the player bundle is, and whether both are usable.
 
 Beyond that, a failed publish is usually no Node on the machine (Codex CLI),
 no network approval (Codex sandbox), or not signed in. For anything else,

@@ -45,9 +45,11 @@ and present each entry's real trade-offs (`summary`, `downloadBytes`,
 install; more than one is fine. An entry carrying an `unsupported` field
 cannot run in this build (kokoro on Intel Macs, for example) — relay its
 `message` and offer the rest. `bisque-voice install <id>` installs. Then pick
-a voice: if `doctor` printed a `settings` line with a voice, that account
+a voice: if `doctor` printed a `settings` line with a voice, that saved
 setting is the default and `publish` uses it automatically — only ask the user
-when there is none. When asking, use the engine's own quality metadata: each
+when there is none. A channel can carry its own voice, in which case that line
+says which channel it came from and `publish` narrates in it whenever it
+targets that channel (`--handle`, or the account's default handle). When asking, use the engine's own quality metadata: each
 entry in `engines --json` may carry a `voices` array (id, `grade`,
 `recommended` — recommended first). Offer the **recommended** voices with
 their grades, suggesting `kokoro:af_heart` (grade A) as the default. Only if
@@ -107,16 +109,17 @@ anything when the username is missing, so nothing is wasted either way.
 ## 2. Fetch the format spec — never write it from memory
 
 ```sh
-curl -fsSL "https://bisque.cloud/api/presentations/spec?part=format" -o spec.md
+node present.mjs spec --out spec.md
 ```
 
-```powershell
-irm "https://bisque.cloud/api/presentations/spec?part=format" -OutFile spec.md
-```
+Read `spec.md` and follow it exactly; it is the renderer's own contract, which
+is why it is fetched rather than repeated here.
 
-Public, no auth. Read `spec.md` and follow it exactly; it is the renderer's own
-contract, which is why it is fetched rather than repeated here. Always pass
-`part=format` explicitly.
+Use the command rather than `curl`. The endpoint is public and a plain fetch
+still returns a correct spec — but the command sends the credentials this
+account already has, and the spec can carry sections that only some accounts
+are entitled to. Fetched without them, those sections are simply absent and
+you would never know the capability existed.
 
 ## 3. Author
 
@@ -187,6 +190,15 @@ the same `--title`/`--slug`/`--presentation-id`/`--speed` as before, or it is a
 different presentation. Use `--all` only to deliberately re-synthesize
 everything — e.g. after changing voice, which does **not** invalidate the
 carried-forward audio on its own.
+
+## 6. A video, if they want one
+
+`publish` prints a watch URL, and that URL is all a video needs. If the user
+asks for an MP4, a YouTube upload, a Short or a Reel, hand off to the `video`
+skill — `bisque-video` renders any published presentation from its watch URL.
+Don't re-narrate: the audio is already published and the renderer downloads it.
+
+Rendering is macOS-only. On Linux or Windows, say so and offer the watch URL.
 
 ## Rules
 

@@ -786,21 +786,51 @@ async function fetchMeSafe(auth) {
 }
 
 /**
- * The `settings` object on /api/me — account-level defaults set at
- * bisque.cloud. Contract: the object and every field in it are OPTIONAL; an
- * absent field means "not set", never an error. Fields this script
- * understands: `voiceId` (e.g. "kokoro:af_heart") and `engine` (a
- * bisque-voice engine id). `model` is server-side narration only, so it is
- * read but unused here. Anything non-string is ignored.
+ * The handle a publish will land under, for voice resolution: an explicit
+ * `--handle`, else the account's default username. Absent when the account
+ * has no username at all (a first publish stops on that anyway).
  */
-function accountSettings(me) {
+function publishHandle(flags, me) {
+  const explicit = typeof flags?.handle === "string" ? flags.handle.trim() : "";
+  if (explicit) return explicit.toLowerCase();
+  const username = me?.account?.username;
+  return typeof username === "string" && username
+    ? username.toLowerCase()
+    : null;
+}
+
+/**
+ * The `settings` object on /api/me — defaults set at bisque.cloud. Contract:
+ * the object and every field in it are OPTIONAL; an absent field means "not
+ * set", never an error. Fields this script understands: `voiceId` (e.g.
+ * "kokoro:af_heart") and `engine` (a bisque-voice engine id). `model` is
+ * server-side narration only, so it is read but unused here. Anything
+ * non-string is ignored.
+ *
+ * A channel may carry its own voice (`channelVoices.<handle>`), and it wins
+ * over the account's when this publish targets that channel — the same
+ * precedence the server applies to narration it synthesizes itself. Both
+ * fields are taken from the channel entry together, never mixed with the
+ * account's, so a channel that sets only an engine can't inherit a voice id
+ * saved for a different one. Pass the handle to get that; omit it and this
+ * is the account voice, unchanged.
+ */
+function accountSettings(me, handle) {
   const s = me?.settings;
   if (!s || typeof s !== "object" || Array.isArray(s)) return {};
   const str = (v) => (typeof v === "string" && v !== "" ? v : undefined);
+
+  const channel = handle ? s.channelVoices?.[handle] : undefined;
+  const voice =
+    channel && typeof channel === "object" && !Array.isArray(channel)
+      ? channel
+      : s;
+
   return {
-    voiceId: str(s.voiceId),
-    engine: str(s.engine),
+    voiceId: str(voice.voiceId),
+    engine: str(voice.engine),
     model: str(s.model),
+    fromChannel: voice !== s ? handle : undefined,
   };
 }
 
@@ -829,7 +859,10 @@ export function localVoiceRef(voiceId, engineId) {
  *  `engine:` qualifier is dropped rather than handed to bisque-voice as a
  *  conflict. */
 function applyAccountSettings(flags, me) {
-  const settings = accountSettings(me);
+  const settings = accountSettings(me, publishHandle(flags, me));
+  const source = settings.fromChannel
+    ? `@${settings.fromChannel} setting`
+    : "account setting";
   if (!flags.voice && settings.voiceId) {
     // An explicit --engine outranks the account's, and inside this branch
     // flags.voice is unset — so engineFor() is exactly "the engine this publish
@@ -840,10 +873,10 @@ function applyAccountSettings(flags, me) {
     );
     if (local) {
       flags.voice = local;
-      say(`voice: ${local} (account setting)`);
+      say(`voice: ${local} (${source})`);
     } else {
       say(
-        `note: account voice setting ${JSON.stringify(settings.voiceId)} is not ` +
+        `note: ${source} ${JSON.stringify(settings.voiceId)} is not ` +
           `a local voice; pass --voice, or change the setting on bisque.cloud.`,
       );
     }
@@ -858,13 +891,14 @@ function applyAccountSettings(flags, me) {
       // it, and handing it over produces an unknown-engine error that says
       // nothing about where the setting came from.
       say(
-        `note: this account is set to a cloud voice, and narration here is ` +
-          `local. Pass --voice <engine:voice>, or pick a local voice at ` +
+        `note: ${settings.fromChannel ? `@${settings.fromChannel} is` : "this account is"} ` +
+          `set to a cloud voice, and narration here is local. Pass ` +
+          `--voice <engine:voice>, or pick a local voice at ` +
           `bisque.cloud/welcome.`,
       );
     } else if (!voiceEngine || voiceEngine === settings.engine) {
       flags.engine = settings.engine;
-      say(`engine: ${settings.engine} (account setting)`);
+      say(`engine: ${settings.engine} (${source})`);
     }
   }
 }
@@ -1158,13 +1192,22 @@ async function cmdDoctor(flags) {
             "             node present.mjs claim-username <handle>",
         );
       }
-      settings = accountSettings(me);
+      // Resolved for the handle a publish would target, so doctor reports
+      // the voice that will actually speak rather than the account's.
+      settings = accountSettings(me, publishHandle(flags, me));
       const parts = [
         settings.voiceId ? `voice ${settings.voiceId}` : null,
         settings.engine ? `engine ${settings.engine}` : null,
         settings.model ? `model ${settings.model}` : null,
       ].filter(Boolean);
-      if (parts.length > 0) say(`settings   : ${parts.join(", ")}`);
+      if (parts.length > 0) {
+        say(
+          `settings   : ${parts.join(", ")}` +
+            (settings.fromChannel
+              ? ` (voice set on @${settings.fromChannel})`
+              : ""),
+        );
+      }
     }
   }
 
@@ -1740,10 +1783,50 @@ function parseFlags(argv) {
   return { flags, rest };
 }
 
+/**
+ * `spec` — fetch the authoring spec, authenticated when credentials exist.
+ *
+ * The endpoint is public and takes no auth for the ordinary payload, so this
+ * could be a bare `curl`, and it was one for a long time. It is a command now
+ * because the spec can carry SOFT-LAUNCHED sections that only the calling
+ * account is entitled to, and those only appear when a bearer token comes
+ * along. Without this, a capability rolled out to an account would be
+ * invisible to the very workflow that account authors with.
+ *
+ * Credentials are optional here on purpose: no profile, no `login`, an expired
+ * key — all of them still get the correct public spec, which is the whole
+ * point of the endpoint. Auth only ever ADDS.
+ */
+async function cmdSpec(flags) {
+  const part = typeof flags.part === "string" ? flags.part : "format";
+  const auth = resolveAuth({
+    profile: typeof flags.profile === "string" ? flags.profile : undefined,
+    cwd: process.cwd(),
+  });
+  const headers = { accept: "text/markdown" };
+  if (auth?.apiKey) Object.assign(headers, authHeaders(auth));
+
+  const url = `${BASE}/api/presentations/spec?part=${encodeURIComponent(part)}`;
+  const response = await fetch(url, { headers });
+  if (!response.ok) {
+    fail(`spec fetch failed: HTTP ${response.status}`);
+  }
+  const text = await response.text();
+
+  const out = typeof flags.out === "string" ? flags.out : null;
+  if (out) {
+    fs.writeFileSync(out, text);
+    say(`wrote ${out} (${text.length} chars)${auth?.apiKey ? ", authenticated" : ""}`);
+  } else {
+    process.stdout.write(text);
+  }
+}
+
 const USAGE = `usage:
   node present.mjs doctor  [--voice V] [--device auto|cpu|gpu] [--no-smoke]
   node present.mjs login   [--profile NAME]
   node present.mjs claim-username <handle> [--profile NAME]
+  node present.mjs spec    [--part format|portable|macos|recipe] [--out spec.md]
   node present.mjs plan    [--html index.html]
   node present.mjs publish [--html index.html] --voice <engine:voice>
                            [--title T] [--slug S] [--visibility unlisted|public|private]
@@ -1772,6 +1855,8 @@ async function main() {
       return cmdLogin(flags);
     case "claim-username":
       return cmdClaimUsername(rest, flags);
+    case "spec":
+      return cmdSpec(flags);
     case "plan":
       return cmdPlan(flags);
     case "publish":
