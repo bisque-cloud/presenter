@@ -86,14 +86,10 @@ somewhere — YouTube, a Slack message, a folder — do that next.
 - **Absolute path.** `~/.bisque/bin/bisque-video`. `command -v` reports
   "missing" on machines where it is installed.
 - **A private presentation can't be fetched by URL.** If `export` says so, the
-  presentation is not public or unlisted. Offer to make it unlisted, or to
-  export from the Bisque Mac app on the account that owns it. Don't try to
-  work around it.
+  presentation is not public or unlisted. Offer to make it unlisted. Don't try
+  to work around it.
 - **Never re-narrate to make a video.** The audio is already published; this
   downloads it. If the user wants different narration, that's `/present`
   republishing the presentation, and the video is rendered after.
-- **The watermark follows the presentation's owner**, exactly as it does in
-  the Bisque app. There is no flag to remove it and you should not look for
-  one.
 - **Don't render a presentation the user didn't ask about.** A channel URL
   lists many; ask which one.
