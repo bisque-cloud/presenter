@@ -136,8 +136,14 @@ its `<aside class="notes">`; a slide without one is silent. Optionally write:
   page that renders locally renders the same once published. Never link a font
   or image from another origin; it will not be there for the viewer.
 
+When a voice would say a word wrong, fix the sound with a pronunciation marker
+rather than respelling the word — `[live](/lˈaɪv/)` for IPA, `[live](liv)` for a
+respelling. The bracket text is what the transcript, captions and search show;
+the parenthesis is only ever spoken.
+
 `node present.mjs plan --html index.html` shows exactly what will be spoken, per
-slide. Read it before synthesizing.
+slide. Read it before synthesizing — it is where you catch a word the voice will
+get wrong.
 
 ## 4. Publish
 
