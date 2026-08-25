@@ -145,6 +145,15 @@ the parenthesis is only ever spoken.
 slide. Read it before synthesizing — it is where you catch a word the voice will
 get wrong.
 
+### Publishing into a company (bisque.team)
+
+If the user asks to publish for their team or company, add `--org <slug>`
+(their organization's slug on bisque.team). The presentation then belongs
+to the company — it lives at `bisque.team/{org}/{slug}`, only members can
+open it, and it defaults to members-only visibility. A repository that
+always publishes to one company can pin it once with `{"org": "<slug>"}`
+in `.bisque.json`. Do not pass `--handle` with `--org`.
+
 ## 4. Publish
 
 ```sh

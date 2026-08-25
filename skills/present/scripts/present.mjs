@@ -700,6 +700,27 @@ function pinnedProfile(from) {
   }
 }
 
+/** `.bisque.json` may also pin the ORGANIZATION this directory publishes
+ *  into (`{"org": "acme"}`): every publish from the repo then goes to the
+ *  company's library on bisque.team instead of a personal channel. Same
+ *  upward walk as the profile pin. `--org` overrides; `--org ""` clears. */
+function pinnedOrg(from) {
+  let dir = path.resolve(from);
+  for (;;) {
+    try {
+      const pinned = JSON.parse(
+        fs.readFileSync(path.join(dir, ".bisque.json"), "utf8"),
+      );
+      if (typeof pinned.org === "string" && pinned.org) return pinned.org;
+    } catch {
+      /* absent or unreadable — keep walking */
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
 /**
  * env → `--profile` → `.bisque.json` → `present` → `default` → the only one.
  *
@@ -1573,6 +1594,18 @@ async function cmdPublish(flags) {
     );
   }
 
+  // Company publish target: --org wins, else the .bisque.json pin. An org
+  // publish has no personal handle, and its natural visibility is "org"
+  // (members only) unless the caller says otherwise.
+  const org =
+    flags.org !== undefined ? flags.org || null : pinnedOrg(workDir);
+  if (org && flags.handle) {
+    fail(
+      "--handle and --org are mutually exclusive — a company publish has no personal handle.",
+    );
+  }
+  if (org) say(`org: publishing into ${org} on bisque.team`);
+
   const meta = {
     indexHtml,
     ...(assets.length > 0 ? { assets } : {}),
@@ -1582,7 +1615,8 @@ async function cmdPublish(flags) {
       ? { presentationId: flags["presentation-id"] }
       : {}),
     ...(flags.handle ? { handle: flags.handle } : {}),
-    visibility: flags.visibility ?? "unlisted",
+    ...(org ? { org, ...(flags.group ? { group: flags.group } : {}) } : {}),
+    visibility: flags.visibility ?? (org ? "org" : "unlisted"),
     ...(voiceId ? { voiceId } : {}),
     // ALWAYS explicit: speechSpeed is part of the audio cache key, so the value
     // recorded at publish time has to be the exact value synthesis used.
@@ -1879,6 +1913,7 @@ const USAGE = `usage:
   node present.mjs publish [--html index.html] --voice <engine:voice>
                            [--title T] [--slug S] [--visibility unlisted|public|private]
                            [--presentation-id ID] [--handle H]
+                           [--org SLUG] [--group ID]
                            [--context context.md] [--design design.md]
                            [--engine E] [--align A|none] [--speed 1.0] [--match-macos]
                            [--device auto|cpu|gpu] [--audio-dir audio] [--all]
@@ -1886,6 +1921,9 @@ const USAGE = `usage:
 
 --voice/--engine fall back to the account's settings on bisque.cloud (via
 /api/me) when omitted.
+
+--org publishes into a company's library on bisque.team (members only by
+default); a repo can pin it with {"org": "<slug>"} in .bisque.json.
 
 Credentials: BISQUE_API_KEY + BISQUE_USER_ID, else --profile / BISQUE_PROFILE /
 .bisque.json's "profile", else the single profile in ~/.bisque/config.json.`;
