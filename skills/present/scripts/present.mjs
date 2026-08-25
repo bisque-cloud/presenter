@@ -284,7 +284,8 @@ function stripPronunciation(text) {
     if (end === -1) break;
     const display = text.slice(open + 1, close);
     const body = text.slice(close + 2, end);
-    const isIpa = body.startsWith("/") && body.endsWith("/") && body.length >= 2;
+    const isIpa =
+      body.startsWith("/") && body.endsWith("/") && body.length >= 2;
     const inner = isIpa ? body.slice(1, -1) : body;
     if (
       display.trim() === "" ||
@@ -1467,6 +1468,66 @@ function cmdPlan(flags) {
   );
 }
 
+/**
+ * Per-word pronunciation facts for every narrated slide, straight from the
+ * voice's own letters-to-sounds stage. Synthesizes nothing.
+ *
+ * Emits, per slide, bisque-voice's `pronunciation-report --json` envelope:
+ * `inspectable`, and for each word its `phonemes`, `respelled`, `inLexicon`
+ * and `readings`. Facts only — the caller judges the respellings against how
+ * the words should sound. Markers already in the narration stay in the text
+ * handed over, so a marked word reports the pinned pronunciation; that is
+ * what makes this the verify step of the loop in SKILL.md as well as the
+ * report step.
+ */
+function cmdPronunciationReport(flags) {
+  const bin = requireTts();
+  const voice = typeof flags.voice === "string" ? flags.voice : null;
+  if (!voice) {
+    fail(
+      "--voice is required: the voice id chooses the lexicon the report " +
+        "reads, e.g. --voice kokoro:af_heart.",
+    );
+  }
+  const htmlPath = path.resolve(flags.html ?? "index.html");
+  const plan = narrationPlan(fs.readFileSync(htmlPath, "utf8"));
+  const slides = plan.map((slide) => {
+    const args = [
+      "pronunciation-report",
+      "--voice",
+      voice,
+      "--text",
+      "-",
+      "--json",
+    ];
+    if (typeof flags.engine === "string" && flags.engine) {
+      args.push("--engine", flags.engine);
+    }
+    const res = runTtsTry(bin, args, { input: slide.text });
+    if (!res.ok) {
+      if (/unrecognized subcommand|unexpected argument/i.test(res.stderr)) {
+        fail(
+          "this bisque-voice has no pronunciation-report subcommand — " +
+            "update it first:\n" +
+            (process.platform === "win32"
+              ? "  irm https://download.bisque.today/bisque-voice/install.ps1 | iex"
+              : "  curl -fsSL https://download.bisque.today/bisque-voice/install.sh | sh"),
+        );
+      }
+      fail(
+        `bisque-voice pronunciation-report failed on ${slide.slideKey} ` +
+          `(${res.detail})\n${res.stderr}`,
+      );
+    }
+    return {
+      slideIndex: slide.slideIndex,
+      slideKey: slide.slideKey,
+      ...JSON.parse(res.stdout),
+    };
+  });
+  process.stdout.write(JSON.stringify({ slides }, null, 2) + "\n");
+}
+
 /** The manifest's own audio path for a slide — mirrors `audio/<slideKey>.mp3`. */
 function audioPathFor(slideKey) {
   return `audio/${slideKey}.mp3`;
@@ -1898,7 +1959,9 @@ async function cmdSpec(flags) {
   const out = typeof flags.out === "string" ? flags.out : null;
   if (out) {
     fs.writeFileSync(out, text);
-    say(`wrote ${out} (${text.length} chars)${auth?.apiKey ? ", authenticated" : ""}`);
+    say(
+      `wrote ${out} (${text.length} chars)${auth?.apiKey ? ", authenticated" : ""}`,
+    );
   } else {
     process.stdout.write(text);
   }
@@ -1910,6 +1973,8 @@ const USAGE = `usage:
   node present.mjs claim-username <handle> [--profile NAME]
   node present.mjs spec    [--part format|portable|macos|recipe] [--out spec.md]
   node present.mjs plan    [--html index.html]
+  node present.mjs pronunciation-report [--html index.html] --voice <engine:voice>
+                           [--engine E]
   node present.mjs publish [--html index.html] --voice <engine:voice>
                            [--title T] [--slug S] [--visibility unlisted|public|private]
                            [--presentation-id ID] [--handle H]
@@ -1945,6 +2010,8 @@ async function main() {
       return cmdSpec(flags);
     case "plan":
       return cmdPlan(flags);
+    case "pronunciation-report":
+      return cmdPronunciationReport(flags);
     case "publish":
       return cmdPublish(flags);
     default:

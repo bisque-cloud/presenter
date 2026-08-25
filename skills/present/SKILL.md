@@ -142,8 +142,34 @@ respelling. The bracket text is what the transcript, captions and search show;
 the parenthesis is only ever spoken.
 
 `node present.mjs plan --html index.html` shows exactly what will be spoken, per
-slide. Read it before synthesizing — it is where you catch a word the voice will
-get wrong.
+slide. Read it before synthesizing.
+
+### Check pronunciations before synthesizing
+
+```sh
+node present.mjs pronunciation-report --html index.html --voice <engine:voice>
+```
+
+It emits, per slide and per word, what the voice will say: `phonemes`, a
+`respelled` form in ordinary letters, `inLexicon`, and `readings`. The report
+is facts only — it flags nothing, and you judge every word:
+
+1. Read each `respelled` value against how the word should sound. Watch names
+   and product words (`inLexicon: false` means the pronunciation was guessed
+   from the spelling) and words with `readings` above 1 (a reading was chosen
+   for that occurrence; check it is the one the sentence means).
+2. For a word said wrong, write a marker with your best IPA into the slide's
+   narration — `[Kokoro](/kˈOkOɹO/)` — and run the report again. The reported
+   `respelled` for that word is the verdict. The engine's notation differs
+   from standard IPA (`O` is the "oh" diphthong, `ə` is schwa), so a first
+   proposal is often wrong and only the re-run confirms it.
+3. Repeat until the respelling matches the intended sound, at most three
+   report runs per word. If three runs do not land it, remove the marker,
+   leave the word as written, and tell the user which word you could not fix.
+
+`inspectable: false` means the voice has no letters-to-sounds stage to read;
+the `reason` field says why. That is not a pass — tell the user no automated
+check ran for that voice. Markers still work there, judged by ear.
 
 ### Publishing into a company (bisque.team)
 
