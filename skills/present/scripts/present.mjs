@@ -250,8 +250,56 @@ export function narrationPlan(html) {
     .filter((s) => s.text !== "")
     .map((s) => ({
       ...s,
-      wordCount: s.text.split(/\s+/).filter(Boolean).length,
+      // Count DISPLAY words. A pronunciation override is one word to a reader
+      // and to the timings bisque-voice reports, but `[Qwen3](Qwen three)` is
+      // two whitespace tokens raw — counting those rejects a valid publish
+      // with a word-timing mismatch. Same rule as `stripPronunciation` in
+      // packages/presentation-format; see docs/bisque-voice-pronunciation.md.
+      wordCount: stripPronunciation(s.text).split(/\s+/).filter(Boolean).length,
     }));
+}
+
+/**
+ * Replace every `[display](spoken)` override with the word a reader sees.
+ *
+ * Deliberately mirrors `parse_override` in apps/bisque-voice/src/pronounce.rs
+ * and `parsePronunciation` in packages/presentation-format: anything that does
+ * not parse cleanly stays literal, so prose holding a bracket is never eaten,
+ * and a body of empty slashes is an unfinished override rather than a marker.
+ */
+function stripPronunciation(text) {
+  let out = "";
+  let at = 0;
+  let i = 0;
+  while (i < text.length) {
+    const open = text.indexOf("[", i);
+    if (open === -1) break;
+    const close = text.indexOf("]", open + 1);
+    if (close === -1) break;
+    if (text[close + 1] !== "(") {
+      i = open + 1;
+      continue;
+    }
+    const end = text.indexOf(")", close + 2);
+    if (end === -1) break;
+    const display = text.slice(open + 1, close);
+    const body = text.slice(close + 2, end);
+    const isIpa = body.startsWith("/") && body.endsWith("/") && body.length >= 2;
+    const inner = isIpa ? body.slice(1, -1) : body;
+    if (
+      display.trim() === "" ||
+      inner.trim() === "" ||
+      display.includes("\n") ||
+      body.includes("\n")
+    ) {
+      i = open + 1;
+      continue;
+    }
+    out += text.slice(at, open) + display;
+    at = end + 1;
+    i = end + 1;
+  }
+  return out + text.slice(at);
 }
 
 // ─── bisque-voice ──────────────────────────────────────────────────────────
