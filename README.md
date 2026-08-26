@@ -5,11 +5,12 @@ publish to a shareable watch URL on [bisque.today](https://bisque.today).
 Narration is synthesized on your own machine — **free and unlimited**; nothing
 is billed per word.
 
-The collection ships two skills. **`present`** is the main one: you describe a
+The collection ships three skills. **`present`** is the main one: you describe a
 presentation, your agent authors it, your machine narrates it, and Bisque hosts
 it. It works in **Claude Code**, **Gemini CLI**, and **Codex CLI**, on macOS,
-Linux, and Windows. **`video`** turns any published presentation into an MP4 you
-can upload; it runs on macOS.
+Linux, and Windows. **`watch`** reads a published presentation — anyone's — so
+your agent can summarize it or answer questions about it. **`video`** turns any
+published presentation into an MP4 you can upload; it runs on macOS.
 
 ## How it works
 
@@ -34,6 +35,18 @@ slides play with synchronized narration in any browser.
 Change a slide and ask it to publish again, and only that slide is
 re-synthesized — an HTML-only edit costs no synthesis at all. The presentation
 is a living document, not a one-shot render.
+
+## Reading one back
+
+A presentation is a narrated document, so your agent can read one instead of
+watching it. Paste a link and ask:
+
+> What does this presentation say about pricing?
+
+The `watch` skill fetches the full narration transcript and the background
+`context.md` the author shipped with it, then answers from that material and
+cites the slides it used. It works on anyone's public presentation, and it
+needs no account — sign in and your own private presentations open too.
 
 ## Turning it into a video
 
@@ -69,6 +82,7 @@ looks. Clone the collection and copy the skills you want:
 git clone https://github.com/bisque-cloud/presenter
 cp -r presenter/skills/present ~/.claude/skills/present   # Claude Code
 cp -r presenter/skills/present ~/.agents/skills/present   # Codex + Gemini
+cp -r presenter/skills/watch   ~/.claude/skills/watch     # optional
 cp -r presenter/skills/video   ~/.claude/skills/video     # optional, macOS
 ```
 
