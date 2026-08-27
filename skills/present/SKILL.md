@@ -27,8 +27,12 @@ and — when you pass `--context` — `context.md`. Alongside them it sends the
 title, slug, handle or org, visibility, voice id and speech speed, and
 authenticates with the account's API key.
 
-`bisque-voice` runs the speech model on this machine, so the narration text and
-the generated audio never reach a speech vendor. `plan` and synthesis are
+`bisque-voice` synthesizes on this machine, so this skill sends no narration
+text or audio to a speech vendor. Bisque also has a premium cloud voice that
+narrates server-side and bills per character against the account's plan — it
+is what scheduled presentations use — but this skill does not reach it:
+`publish` always uploads audio synthesized here, and an account set to a cloud
+voice gets a note asking for a local one instead. `plan` and synthesis are
 local; `spec` only fetches. `publish` is the step that uploads, and
 `--visibility` sets who can open what it publishes (step 6).
 
@@ -58,9 +62,8 @@ speech engine), how big it is (a ~13 MB download, ~30 MB installed, plus a
 speech model they pick later), where it
 comes from (`download.bisque.today`), and where it goes
 (`~/.bisque/bin` — nothing outside the home directory, no `sudo`, no system
-paths). Then stop and let them answer. If they say no, say plainly that
-narration cannot run without it rather than looking for another way. Once they
-agree:
+paths). Then stop and let them answer. If they say no, say plainly that this
+skill cannot narrate without it. Once they agree:
 
 ```sh
 curl -fsSL https://download.bisque.today/bisque-voice/install.sh | sh   # macOS, Linux
