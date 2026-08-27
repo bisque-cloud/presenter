@@ -12,33 +12,6 @@ Bisque publishes it. Free, unlimited, identical on macOS, Linux and Windows.
 extraction, synthesis, publish, upload, complete. Run it with `node` (18+) or
 `bun`; below, `present.mjs` means that file's absolute path.
 
-## What stays on the machine, what leaves it
-
-Tell the user this before the first run, not after. Two Bisque hosts are
-involved:
-
-| Host                    | What it is      | What it gets                       |
-| ----------------------- | --------------- | ---------------------------------- |
-| `download.bisque.today` | release storage | nothing — it only serves downloads |
-| `bisque.cloud`          | the API         | whatever `publish` uploads, below  |
-
-`publish` uploads `index.html`, the narration audio, any files in `assets/`,
-and — when you pass `--context` — `context.md`. Alongside them it sends the
-title, slug, handle or org, visibility, voice id and speech speed, and
-authenticates with the account's API key.
-
-`bisque-voice` synthesizes on this machine, so this skill sends no narration
-text or audio to a speech vendor. Bisque also has a premium cloud voice that
-narrates server-side and bills per character against the account's plan — it
-is what scheduled presentations use — but this skill does not reach it:
-`publish` always uploads audio synthesized here, and an account set to a cloud
-voice gets a note asking for a local one instead. `plan` and synthesis are
-local; `spec` only fetches. `publish` is the step that uploads, and
-`--visibility` sets who can open what it publishes (step 6).
-
-Everything you install comes from `download.bisque.today` over HTTPS, verified
-before it runs (below).
-
 ## 1. Check the machine
 
 ```sh
@@ -54,16 +27,8 @@ reports, in this order:
 
 **No `bisque-voice`.** It lives at `~/.bisque/bin/bisque-voice`
 (`%USERPROFILE%\.bisque\bin\bisque-voice.exe`), which is usually **not** on
-`PATH` — never probe with `command -v`/`where`.
-
-**Ask before you download, and wait for an answer.** This installs software on
-someone's machine, so it is their call, not yours. Say what it is (the local
-speech engine), how big it is (a ~13 MB download, ~30 MB installed, plus a
-speech model they pick later), where it
-comes from (`download.bisque.today`), and where it goes
-(`~/.bisque/bin` — nothing outside the home directory, no `sudo`, no system
-paths). Then stop and let them answer. If they say no, say plainly that this
-skill cannot narrate without it. Once they agree:
+`PATH` — never probe with `command -v`/`where`. Tell the user you are about to
+download it (~13 MB, ~30 MB installed) and what it is, then:
 
 ```sh
 curl -fsSL https://download.bisque.today/bisque-voice/install.sh | sh   # macOS, Linux
@@ -72,21 +37,6 @@ curl -fsSL https://download.bisque.today/bisque-voice/install.sh | sh   # macOS,
 ```powershell
 irm https://download.bisque.today/bisque-voice/install.ps1 | iex        # Windows
 ```
-
-The installer compares the archive against the SHA-256 published beside it and
-refuses to install if it does not match or is missing. Mention that when you
-ask — it is part of the answer to "is this safe to run?".
-
-If the user would rather read the script first, or check the archive
-themselves, point them at these instead of running the pipe:
-
-```sh
-curl -fsSL https://download.bisque.today/bisque-voice/install.sh | less
-curl -fsSL https://download.bisque.today/bisque-voice/latest.json
-```
-
-`latest.json` names the current version and the archive for each build. Each
-archive has a `.sha256` published next to it.
 
 **No engine installed.** There is deliberately no default speech model and no
 default voice — the user picks. Run `~/.bisque/bin/bisque-voice engines --json`
@@ -136,30 +86,8 @@ accepts that. The publish response says which slides were approximate.
 
 **No credentials.** `node present.mjs login` prints a URL and a pairing code;
 have the user open the URL and approve, and it saves the key to
-`~/.bisque/config.json` under the profile `present`.
-
-That file holds an API key in plain text, so `login` writes it `0600` and
-re-tightens it on every sign-in — the `bisque` CLI may have created it `0644`
-earlier, and Node applies a new mode only when it creates the file. `doctor`
-reports the mode it finds and prints the `chmod` when it is loose. Never print
-the key, paste it into a presentation, or commit it; `~/.bisque/config.json`
-belongs in a global gitignore.
-
-The file is not the only source. `BISQUE_API_KEY` + `BISQUE_USER_ID` in the
-environment take precedence over it and are never written to disk, so a key
-held in a secret manager can be read into the environment for the length of
-one command:
-
-```sh
-BISQUE_API_KEY="$(op read op://vault/bisque/api-key)" \
-BISQUE_USER_ID="$(op read op://vault/bisque/user-id)" \
-  node present.mjs publish
-```
-
-Any tool that prints a secret works the same way — `op read`, `aws
-secretsmanager get-secret-value`, `gcloud secrets versions access`, `pass`. On
-a shared or multi-user machine, prefer this over the file. A key can be revoked
-at bisque.cloud/setup/keys; if one is exposed, say so and revoke it.
+`~/.bisque/config.json` under the profile `present`. (`BISQUE_API_KEY` +
+`BISQUE_USER_ID` in the environment win over the file.)
 
 **Ambiguous credentials.** With several accounts configured, resolution refuses
 to guess rather than publish to the wrong one — ask the user which, then pass
