@@ -142,10 +142,10 @@ reports the mode it finds and prints the `chmod` when it is loose. Never print
 the key, paste it into a presentation, or commit it; `~/.bisque/config.json`
 belongs in a global gitignore.
 
-The file is a convenience, not the only way. `BISQUE_API_KEY` +
-`BISQUE_USER_ID` in the environment take precedence over it and touch no disk,
-which is what CI and any secret manager should use — read the key out of the
-vault into the environment for the length of the command:
+The file is not the only source. `BISQUE_API_KEY` + `BISQUE_USER_ID` in the
+environment take precedence over it and are never written to disk, so a key
+held in a secret manager can be read into the environment for the length of
+one command:
 
 ```sh
 BISQUE_API_KEY="$(op read op://vault/bisque/api-key)" \
@@ -156,8 +156,7 @@ BISQUE_USER_ID="$(op read op://vault/bisque/user-id)" \
 Any tool that prints a secret works the same way — `op read`, `aws
 secretsmanager get-secret-value`, `gcloud secrets versions access`, `pass`. On
 a shared or multi-user machine, prefer this over the file. A key can be revoked
-at bisque.cloud, so if one is ever exposed, say so and revoke rather than
-hoping.
+at bisque.cloud/setup/keys; if one is exposed, say so and revoke it.
 
 **Ambiguous credentials.** With several accounts configured, resolution refuses
 to guess rather than publish to the wrong one — ask the user which, then pass
