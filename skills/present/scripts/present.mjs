@@ -1939,9 +1939,15 @@ function parseFlags(argv) {
  * Credentials are optional here on purpose: no profile, no `login`, an expired
  * key — all of them still get the correct public spec, which is the whole
  * point of the endpoint. Auth only ever ADDS.
+ *
+ * The default part is `core` — the format contract without the deep
+ * capability modules. The core's own index names the modules (charts,
+ * tables, dither, motion, code-walkthrough, cues-advanced); fetch each one
+ * the presentation needs with `--part <name>`. `--part format` is the whole
+ * spec with every module inlined.
  */
 async function cmdSpec(flags) {
-  const part = typeof flags.part === "string" ? flags.part : "format";
+  const part = typeof flags.part === "string" ? flags.part : "core";
   const auth = resolveAuth({
     profile: typeof flags.profile === "string" ? flags.profile : undefined,
     cwd: process.cwd(),
@@ -1949,8 +1955,20 @@ async function cmdSpec(flags) {
   const headers = { accept: "text/markdown" };
   if (auth?.apiKey) Object.assign(headers, authHeaders(auth));
 
-  const url = `${BASE}/api/presentations/spec?part=${encodeURIComponent(part)}`;
-  const response = await fetch(url, { headers });
+  // Path form first (the canonical spelling; unknown names 404 loudly).
+  // Fall back to the legacy ?part= query for servers that predate path
+  // addressing — the query form answers an unknown part with the full
+  // default payload, so the fallback degrades to "more spec than asked
+  // for", never to a miss.
+  const urls = [
+    `${BASE}/api/presentations/spec/${encodeURIComponent(part)}.md`,
+    `${BASE}/api/presentations/spec?part=${encodeURIComponent(part)}`,
+  ];
+  let response;
+  for (const url of urls) {
+    response = await fetch(url, { headers });
+    if (response.ok) break;
+  }
   if (!response.ok) {
     fail(`spec fetch failed: HTTP ${response.status}`);
   }
@@ -1971,7 +1989,7 @@ const USAGE = `usage:
   node present.mjs doctor  [--voice V] [--device auto|cpu|gpu] [--no-smoke]
   node present.mjs login   [--profile NAME]
   node present.mjs claim-username <handle> [--profile NAME]
-  node present.mjs spec    [--part format|portable|macos|recipe] [--out spec.md]
+  node present.mjs spec    [--part core|format|<module>|portable|macos|recipe] [--out spec.md]
   node present.mjs plan    [--html index.html]
   node present.mjs pronunciation-report [--html index.html] --voice <engine:voice>
                            [--engine E]

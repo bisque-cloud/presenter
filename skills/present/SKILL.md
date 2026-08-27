@@ -115,6 +115,20 @@ node present.mjs spec --out spec.md
 Read `spec.md` and follow it exactly; it is the renderer's own contract, which
 is why it is fetched rather than repeated here.
 
+What you fetched is the **core** spec. Its "Capability modules" index names
+the deep modules — charts, tables, dither, motion, code-walkthrough,
+cues-advanced — and the condition under which each is needed. Once you know
+what the presentation contains, fetch every module it calls for and read it
+before composing any slide that uses the capability:
+
+```sh
+node present.mjs spec --part charts --out spec-charts.md
+```
+
+A module you have not read is a capability you must not use. When unsure
+whether a module applies, fetch it — one module is cheap. `--part format`
+fetches the whole spec with every module inlined, if you prefer one file.
+
 Use the command rather than `curl`. The endpoint is public and a plain fetch
 still returns a correct spec — but the command sends the credentials this
 account already has, and the spec can carry sections that only some accounts
