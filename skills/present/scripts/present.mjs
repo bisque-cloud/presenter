@@ -680,6 +680,30 @@ function readConfig() {
   }
 }
 
+/**
+ * Report whether `~/.bisque/config.json` is readable by anyone but its owner.
+ * Windows ACLs are not POSIX bits and `mode` there says nothing useful, so
+ * this checks only where the answer means something.
+ */
+function reportConfigPermissions() {
+  if (process.platform === "win32") return;
+  let mode;
+  try {
+    mode = fs.statSync(CONFIG_PATH).mode & 0o777;
+  } catch {
+    return; // no config file — nothing is exposed
+  }
+  if ((mode & 0o077) === 0) {
+    say(`config     : ${CONFIG_PATH} (0${mode.toString(8)}, owner-only)`);
+    return;
+  }
+  say(
+    `config     : ${CONFIG_PATH} is 0${mode.toString(8)} — it holds an API key\n` +
+      `             and every account on this machine can read it. Fix:\n` +
+      `             chmod 600 ${CONFIG_PATH}`,
+  );
+}
+
 /** `.bisque.json` — the committed, per-repo pin of which account this
  *  directory speaks for. Walked up from `from`, exactly as the `bisque` CLI
  *  does, so both tools agree about whose presentation this is. */
@@ -1237,6 +1261,11 @@ async function cmdDoctor(flags) {
         ? `credentials: AMBIGUOUS — ${auth.error}`
         : "credentials: NONE — run `node present.mjs login`",
   );
+  // The config file holds an API key in plain text. `login` writes it 0600,
+  // but a file the `bisque` CLI created earlier can be 0644 and stays that way
+  // until something notices — so notice here, where the user is already
+  // reading a list of things to fix, and say exactly how to fix it.
+  reportConfigPermissions();
   say(`api base   : ${BASE}`);
 
   // Account preflight: the same /api/me the publish path consults, so a
@@ -1449,10 +1478,17 @@ async function cmdLogin(flags = {}) {
       apiKey: poll.apiKey,
       ...(poll.email ? { email: poll.email } : {}),
     };
-    fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+    fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true, mode: 0o700 });
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + "\n", {
       mode: 0o600,
     });
+    // `mode` above applies only when writeFileSync CREATES the file. The
+    // `bisque` CLI usually creates this config first, at 0644, so on most
+    // machines the file already exists and that mode is silently ignored —
+    // which leaves an API key readable by every account on the box. chmod
+    // unconditionally, on every login, so an already-loose file gets fixed
+    // rather than inherited.
+    fs.chmodSync(CONFIG_PATH, 0o600);
     say(
       `Signed in as ${poll.email ?? poll.userId}; saved to ${CONFIG_PATH} (profile "${profileName}").`,
     );
