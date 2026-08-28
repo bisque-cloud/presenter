@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "bisque": {
+      "type": "http",
+      "url": "https://bisque.cloud/presentations/mcp"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "bisque",
+  "displayName": "Bisque",
+  "description": "Turn a document, a thread, or a set of numbers into a presentation people can watch — slides with a spoken script, at a link you can send. Claude writes it, Bisque records and hosts it, and you get a watch URL that opens in any browser.",
+  "version": "1.0.0",
+  "author": { "name": "Bisque" },
+  "homepage": "https://bisque.today",
+  "keywords": [
+    "presentations",
+    "slides",
+    "deck",
+    "slideshow",
+    "briefing",
+    "video",
+    "bisque"
+  ]
+}

@@ -61,9 +61,31 @@ re-narrated, so the video sounds exactly like the watch URL.
 
 Rendering takes about as long as the presentation runs, and it needs macOS.
 
+## Somewhere without a terminal
+
+The three skills above narrate on the machine they run on, which needs a
+terminal and a few gigabytes of disk. Agents that run in a hosted sandbox have
+neither, so this repo ships a second plugin — **Bisque**, under
+[`cowork/`](./cowork) — that publishes the same presentations through Bisque's
+connector, with the recording done on Bisque's side. Same format, same watch
+URL, nothing to install.
+
 ## Install
 
-Add the skills with the [`skills`](https://www.npmjs.com/package/skills) CLI:
+Both plugins live in one marketplace. In Claude Code:
+
+```
+/plugin marketplace add bisque-cloud/presenter
+/plugin install presenter@bisque-cloud
+```
+
+In Claude Cowork, open **Customize → Plugins → Add marketplace**, enter
+`bisque-cloud/presenter`, and install **Bisque**. It connects to your account
+the first time you use it.
+
+### Just the skills
+
+Add them with the [`skills`](https://www.npmjs.com/package/skills) CLI:
 
 ```sh
 npx skills add bisque-cloud/presenter

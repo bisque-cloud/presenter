@@ -1,0 +1,36 @@
+{
+  "$schema": "https://code.claude.com/schemas/marketplace.json",
+  "name": "bisque-cloud",
+  "owner": { "name": "Bisque", "url": "https://bisque.today" },
+  "description": "Bisque's plugins: turn what you have into a presentation people can watch.",
+  "plugins": [
+    {
+      "name": "presenter",
+      "displayName": "Presenter",
+      "source": "./",
+      "description": "Bisque's open-source skills for building narrated presentations you publish to a shareable watch URL. Includes the present skill, which authors and publishes; the watch skill, which reads a published presentation so an agent can summarize or answer questions about it; and the video skill, which renders a published presentation to an MP4 on a Mac. Narration is generated on your own machine.",
+      "homepage": "https://bisque.today",
+      "license": "MIT",
+      "category": "productivity",
+      "keywords": ["presentations", "slides", "video", "narration", "bisque"]
+    },
+    {
+      "name": "bisque",
+      "displayName": "Bisque",
+      "source": "./cowork",
+      "description": "Turn a document, a thread, or a set of numbers into a presentation people can watch — slides with a spoken script, at a link you can send. Claude writes it, Bisque records and hosts it, and you get a watch URL that opens in any browser.",
+      "homepage": "https://bisque.today",
+      "license": "MIT",
+      "category": "productivity",
+      "keywords": [
+        "presentations",
+        "slides",
+        "deck",
+        "slideshow",
+        "briefing",
+        "video",
+        "bisque"
+      ]
+    }
+  ]
+}
