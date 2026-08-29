@@ -1,11 +1,11 @@
 /**
- * @bisque/sdk — the Bisque API from a program.
+ * @bisquecloud/sdk — the Bisque API from a program.
  *
  * Zero dependencies; uses the global `fetch` (Node 18+, Bun, Deno, browsers).
  * The REST surface it wraps is described at https://bisque.today/openapi.json;
  * how to get a credential is at https://bisque.today/auth.md.
  *
- *   import { Bisque } from "@bisque/sdk";
+ *   import { Bisque } from "@bisquecloud/sdk";
  *   const bisque = new Bisque({ apiKey: process.env.BISQUE_API_KEY });
  *   const spec = await bisque.presentations.spec();      // read the format first
  *   const created = await bisque.presentations.create({ indexHtml });

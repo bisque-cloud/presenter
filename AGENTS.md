@@ -16,7 +16,7 @@ and `video` (render one to MP4). Each lives in `skills/<name>/` as a
   runbook, in the order the steps must happen.
 - Fetch the authoring format from `https://bisque.today/api/presentations/spec`
   every time. Never write the `html-presentation/v1` format from memory.
-- `sdk/` is `@bisque/sdk`, the TypeScript client for the REST API. Its
+- `sdk/` is `@bisquecloud/sdk`, the TypeScript client for the REST API. Its
   tests run with `bun test sdk/`; `bun run build` in `sdk/` emits `dist/`.
 - The REST API is described at `https://bisque.today/openapi.json`; the
   same tools are available over MCP at `https://bisque.today/mcp`. How to

@@ -1,4 +1,4 @@
-# @bisque/sdk
+# @bisquecloud/sdk
 
 The official TypeScript SDK for the [Bisque API](https://bisque.today/docs/api).
 Publish narrated presentations from a program and read any shared one back
@@ -6,13 +6,13 @@ as text. Zero dependencies; runs anywhere `fetch` does (Node 18+, Bun, Deno,
 browsers).
 
 ```sh
-npm install @bisque/sdk
+npm install @bisquecloud/sdk
 ```
 
 ## Read a presentation, no sign-in
 
 ```ts
-import { Bisque } from "@bisque/sdk";
+import { Bisque } from "@bisquecloud/sdk";
 
 const bisque = new Bisque();
 const ctx = await bisque.presentations.context({

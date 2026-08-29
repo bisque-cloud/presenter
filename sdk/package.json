@@ -1,5 +1,5 @@
 {
-  "name": "@bisque/sdk",
+  "name": "@bisquecloud/sdk",
   "version": "0.1.0",
   "description": "Official TypeScript SDK for the Bisque API: publish narrated presentations from a program and read any shared one back as text.",
   "license": "MIT",

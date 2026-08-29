@@ -72,16 +72,16 @@ URL, nothing to install.
 
 ## From your own code
 
-The skills call a public REST API, and so can you. `@bisque/sdk` is the
+The skills call a public REST API, and so can you. `@bisquecloud/sdk` is the
 TypeScript client for it — publish from a script, a CI job, or a server, and
 read any shared presentation back as text:
 
 ```sh
-npm install @bisque/sdk
+npm install @bisquecloud/sdk
 ```
 
 ```ts
-import { Bisque } from "@bisque/sdk";
+import { Bisque } from "@bisquecloud/sdk";
 
 const bisque = new Bisque({ apiKey: process.env.BISQUE_API_KEY });
 const created = await bisque.presentations.create({ indexHtml });
