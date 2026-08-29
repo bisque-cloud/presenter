@@ -1,10 +1,11 @@
 {
-  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "presenter",
-  "displayName": "Presenter",
   "description": "Bisque's open-source skills for building narrated presentations you publish to a shareable watch URL. Includes the present skill, which authors and publishes; the watch skill, which reads a published presentation so an agent can summarize or answer questions about it; and the video skill, which renders a published presentation to an MP4 on a Mac. Narration is generated on your own machine.",
   "version": "1.2.0",
   "author": { "name": "Bisque" },
   "homepage": "https://bisque.today",
+  "repository": "https://github.com/bisque-cloud/presenter",
+  "license": "MIT",
   "keywords": ["presentations", "slides", "video", "narration", "bisque"]
 }
