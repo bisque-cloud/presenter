@@ -1,0 +1,52 @@
+{
+  "name": "@bisque/sdk",
+  "version": "0.1.0",
+  "description": "Official TypeScript SDK for the Bisque API: publish narrated presentations from a program and read any shared one back as text.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "bun test tests/",
+    "prepublishOnly": "bun run build && bun run test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bisque-cloud/presenter.git",
+    "directory": "sdk"
+  },
+  "homepage": "https://bisque.today",
+  "bugs": {
+    "url": "https://github.com/bisque-cloud/presenter/issues"
+  },
+  "keywords": [
+    "bisque",
+    "presentations",
+    "narration",
+    "agents",
+    "mcp",
+    "openapi",
+    "sdk",
+    "api-client"
+  ],
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^20.19.0"
+  }
+}

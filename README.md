@@ -70,6 +70,27 @@ neither, so this repo ships a second plugin — **Bisque**, under
 connector, with the recording done on Bisque's side. Same format, same watch
 URL, nothing to install.
 
+## From your own code
+
+The skills call a public REST API, and so can you. `@bisque/sdk` is the
+TypeScript client for it — publish from a script, a CI job, or a server, and
+read any shared presentation back as text:
+
+```sh
+npm install @bisque/sdk
+```
+
+```ts
+import { Bisque } from "@bisque/sdk";
+
+const bisque = new Bisque({ apiKey: process.env.BISQUE_API_KEY });
+const created = await bisque.presentations.create({ indexHtml });
+const { webUrl } = await bisque.presentations.waitUntilReady(created.presentationId);
+```
+
+It lives in [`sdk/`](./sdk); the API it wraps is described at
+[bisque.today/openapi.json](https://bisque.today/openapi.json).
+
 ## Install
 
 Both plugins live in one marketplace. In Claude Code:
