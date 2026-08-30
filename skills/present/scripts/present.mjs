@@ -290,6 +290,7 @@ function stripPronunciation(text) {
     if (
       display.trim() === "" ||
       inner.trim() === "" ||
+      display.includes("[") ||
       display.includes("\n") ||
       body.includes("\n")
     ) {
@@ -301,6 +302,86 @@ function stripPronunciation(text) {
     i = end + 1;
   }
   return out + text.slice(at);
+}
+
+/**
+ * Everything the server's `parseHtmlPresentation` rejects that an author can
+ * see before spending a minute of synthesis: a pronunciation marker that did
+ * not parse (its leftover `](` is spoken and captioned), and a `data-*-spec`
+ * whose JSON does not parse (the player renders it as empty space). Mirrors
+ * `validatePronunciationMarkers` / `validateSpecJson` in
+ * packages/presentation-format; `plan` prints these and `publish` refuses to
+ * start on them.
+ */
+export function lintPresentation(html) {
+  const problems = [];
+  extractSections(html).forEach((section, i) => {
+    const id = sectionAttr(section, "id") ?? slideKeyFor(i);
+    const where = `slide ${i + 1} (#${id})`;
+
+    const text = narrationOf(section);
+    const shown = stripPronunciation(text);
+    const at = shown.indexOf("](");
+    if (at !== -1) {
+      let start = at;
+      while (start > 0 && !/\s/.test(shown[start - 1]) && at - start < 40)
+        start--;
+      let end = at + 2;
+      while (end < shown.length && !/\s/.test(shown[end]) && end - at < 40)
+        end++;
+      problems.push(
+        `${where}: pronunciation marker did not parse — \`${shown.slice(start, end)}\`. ` +
+          "One marker per word, never nested: `[Changelog's](/…/)`.",
+      );
+    }
+
+    const specs = /\sdata-([a-z]+(?:-[a-z]+)*-spec)=(["'])/g;
+    for (;;) {
+      const m = specs.exec(section);
+      if (m === null) break;
+      const quoteEnd = section.indexOf(m[2], m.index + m[0].length);
+      if (quoteEnd === -1) break;
+      const value = decodeEntities(
+        section.slice(m.index + m[0].length, quoteEnd),
+      );
+      specs.lastIndex = quoteEnd + 1;
+      try {
+        JSON.parse(value);
+      } catch (error) {
+        const tail = value.length > 60 ? `…${value.slice(-60)}` : value;
+        problems.push(
+          `${where}: data-${m[1]} is not valid JSON — ${error.message} — ends \`${tail}\`.`,
+        );
+      }
+    }
+    const background = sectionAttr(section, "data-background")?.trim();
+    if (background?.startsWith("dither:")) {
+      const body = background.slice("dither:".length).trim();
+      if (body.startsWith("{")) {
+        try {
+          JSON.parse(body);
+        } catch (error) {
+          problems.push(
+            `${where}: data-background dither spec is not valid JSON — ${error.message}.`,
+          );
+        }
+      }
+    }
+  });
+  return problems;
+}
+
+function sectionAttr(section, name) {
+  const openEnd = section.indexOf(">");
+  if (openEnd === -1) return undefined;
+  const tag = section.slice(0, openEnd);
+  const pos = tag.indexOf(`${name}=`);
+  if (pos === -1) return undefined;
+  const after = tag.slice(pos + name.length + 1);
+  if (after.startsWith('"')) return after.slice(1).split('"')[0];
+  if (after.startsWith("'")) return after.slice(1).split("'")[0];
+  const m = after.match(/\S+/);
+  return m === null ? undefined : m[0];
 }
 
 // ─── bisque-voice ──────────────────────────────────────────────────────────
@@ -1498,10 +1579,19 @@ async function cmdLogin(flags = {}) {
 
 function cmdPlan(flags) {
   const htmlPath = path.resolve(flags.html ?? "index.html");
-  const plan = narrationPlan(fs.readFileSync(htmlPath, "utf8"));
+  const html = fs.readFileSync(htmlPath, "utf8");
+  const plan = narrationPlan(html);
+  const problems = lintPresentation(html);
   process.stdout.write(
-    JSON.stringify({ narrated: plan.length, slides: plan }, null, 2) + "\n",
+    JSON.stringify({ narrated: plan.length, problems, slides: plan }, null, 2) +
+      "\n",
   );
+  if (problems.length > 0) {
+    fail(
+      `${problems.length} problem(s) the server will reject — fix them before publishing:\n  ` +
+        problems.join("\n  "),
+    );
+  }
 }
 
 /**
@@ -1673,6 +1763,13 @@ async function cmdPublish(flags) {
     }
   }
 
+  const problems = lintPresentation(indexHtml);
+  if (problems.length > 0) {
+    fail(
+      `${problems.length} problem(s) the server will reject — nothing was synthesized:\n  ` +
+        problems.join("\n  "),
+    );
+  }
   const plan = narrationPlan(indexHtml);
   const voiceId = serverVoiceId(flags.voice);
   if (flags.voice && !voiceId) {
@@ -1694,8 +1791,7 @@ async function cmdPublish(flags) {
   // Company publish target: --org wins, else the .bisque.json pin. An org
   // publish has no personal handle, and its natural visibility is "org"
   // (members only) unless the caller says otherwise.
-  const org =
-    flags.org !== undefined ? flags.org || null : pinnedOrg(workDir);
+  const org = flags.org !== undefined ? flags.org || null : pinnedOrg(workDir);
   if (org && flags.handle) {
     fail(
       "--handle and --org are mutually exclusive — a company publish has no personal handle.",
