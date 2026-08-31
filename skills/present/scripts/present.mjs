@@ -219,16 +219,23 @@ function dropSentinels(input) {
   return out;
 }
 
-function narrationOf(section) {
+/** The inside of a slide's `<aside class="notes">`, exactly as authored —
+ *  tags, entities and cue markers all still in it. `null` when the slide has
+ *  no notes. */
+function rawNotesOf(section) {
   const open = '<aside class="notes">';
   const openIdx = section.indexOf(open);
-  if (openIdx === -1) return "";
+  if (openIdx === -1) return null;
   const afterOpen = openIdx + open.length;
   const closeOffset = section.indexOf("</aside>", afterOpen);
-  if (closeOffset === -1) return "";
-  const trimmed = decodeEntities(
-    stripTags(scanMarkers(section.slice(afterOpen, closeOffset))),
-  ).trim();
+  if (closeOffset === -1) return null;
+  return section.slice(afterOpen, closeOffset);
+}
+
+function narrationOf(section) {
+  const raw = rawNotesOf(section);
+  if (raw === null) return "";
+  const trimmed = decodeEntities(stripTags(scanMarkers(raw))).trim();
   if (trimmed === "") return "";
   return collapseWhitespace(dropSentinels(trimmed));
 }
@@ -305,19 +312,58 @@ function stripPronunciation(text) {
 }
 
 /**
- * Everything the server's `parseHtmlPresentation` rejects that an author can
- * see before spending a minute of synthesis: a pronunciation marker that did
- * not parse (its leftover `](` is spoken and captioned), and a `data-*-spec`
- * whose JSON does not parse (the player renders it as empty space). Mirrors
- * `validatePronunciationMarkers` / `validateSpecJson` in
- * packages/presentation-format; `plan` prints these and `publish` refuses to
- * start on them.
+ * A cue marker whose `<<` or `>>` is HTML-escaped, anywhere in a slide's
+ * notes.
+ *
+ * `scanMarkers` above matches the literal `<<…>>` form only, so an escaped
+ * marker is neither stripped from the narration nor fired as a cue: the voice
+ * reads "reveal target s2a" out loud and nothing on the slide moves. One
+ * published presentation carried 13 of them and spent 20 seconds of its 88
+ * saying them.
+ *
+ * The test is the marker grammar from the authoring spec — `<<command args>>`
+ * with both delimiters literal — rather than a list of command names, so
+ * `reveal`, `fire`, `set` and any command the spec adds later are all covered.
+ * Only the notes are scanned: a slide that puts marker syntax on screen writes
+ * it escaped on purpose, and that is correct.
+ */
+const CUE_MARKER_IN_NOTES =
+  /(&lt;&lt;|<<)(\s*[a-zA-Z][\w-]*[\s\S]*?)(&gt;&gt;|>>)/g;
+
+function escapedCueMarkers(rawNotes) {
+  const found = [];
+  for (const m of rawNotes.matchAll(CUE_MARKER_IN_NOTES)) {
+    if (m[1] === "<<" && m[3] === ">>") continue;
+    const body = m[2].length > 60 ? `${m[2].slice(0, 60)}…` : m[2];
+    found.push({ escaped: `${m[1]}${body}${m[3]}`, fixed: `<<${body}>>` });
+  }
+  return found;
+}
+
+/**
+ * Everything an author can see before spending a minute of synthesis: a
+ * pronunciation marker that did not parse (its leftover `](` is spoken and
+ * captioned), a `data-*-spec` whose JSON does not parse (the player renders it
+ * as empty space), and an HTML-escaped cue marker (spoken aloud, and its
+ * reveal never fires). The first two mirror `validatePronunciationMarkers` /
+ * `validateSpecJson` in packages/presentation-format, which the server rejects
+ * a publish on; the escaped marker is caught here only, because the server
+ * accepts it as prose. `plan` prints these and `publish` refuses to start on
+ * them.
  */
 export function lintPresentation(html) {
   const problems = [];
   extractSections(html).forEach((section, i) => {
     const id = sectionAttr(section, "id") ?? slideKeyFor(i);
     const where = `slide ${i + 1} (#${id})`;
+
+    for (const marker of escapedCueMarkers(rawNotesOf(section) ?? "")) {
+      problems.push(
+        `${where}: this cue marker is HTML-escaped — \`${marker.escaped}\`. ` +
+          `Write it literally: \`${marker.fixed}\`. ` +
+          "An escaped marker is read aloud by the voice and never fires.",
+      );
+    }
 
     const text = narrationOf(section);
     const shown = stripPronunciation(text);
@@ -1588,7 +1634,7 @@ function cmdPlan(flags) {
   );
   if (problems.length > 0) {
     fail(
-      `${problems.length} problem(s) the server will reject — fix them before publishing:\n  ` +
+      `${problems.length} problem(s) to fix before publishing:\n  ` +
         problems.join("\n  "),
     );
   }
@@ -1766,7 +1812,7 @@ async function cmdPublish(flags) {
   const problems = lintPresentation(indexHtml);
   if (problems.length > 0) {
     fail(
-      `${problems.length} problem(s) the server will reject — nothing was synthesized:\n  ` +
+      `${problems.length} problem(s) in the presentation — nothing was synthesized:\n  ` +
         problems.join("\n  "),
     );
   }
