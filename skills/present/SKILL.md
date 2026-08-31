@@ -116,10 +116,10 @@ Read `spec.md` and follow it exactly; it is the renderer's own contract, which
 is why it is fetched rather than repeated here.
 
 What you fetched is the **core** spec. Its "Capability modules" index names
-the deep modules — charts, tables, dither, motion, code-walkthrough,
-cues-advanced — and the condition under which each is needed. Once you know
-what the presentation contains, fetch every module it calls for and read it
-before composing any slide that uses the capability:
+the deep modules — design, charts, tables, dither, motion,
+code-walkthrough, cues-advanced — and the condition under which each is
+needed. Once you know what the presentation contains, fetch every module it
+calls for and read it before composing any slide that uses the capability:
 
 ```sh
 node present.mjs spec --part charts --out spec-charts.md

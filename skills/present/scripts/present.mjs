@@ -2119,9 +2119,9 @@ function parseFlags(argv) {
  * point of the endpoint. Auth only ever ADDS.
  *
  * The default part is `core` — the format contract without the deep
- * capability modules. The core's own index names the modules (charts,
- * tables, dither, motion, code-walkthrough, cues-advanced); fetch each one
- * the presentation needs with `--part <name>`. `--part format` is the whole
+ * capability modules. The core's own index names the modules (design,
+ * charts, tables, dither, motion, code-walkthrough, cues-advanced); fetch
+ * each one the presentation needs with `--part <name>`. `--part format` is the whole
  * spec with every module inlined.
  */
 async function cmdSpec(flags) {
