@@ -134,8 +134,11 @@ keep.
 - **Say the thing, never its shape.** "Three highlights" tells a viewer nothing.
   Name the three. Every number carries its unit or its noun: "3 repositories",
   not "3".
-- **The title opens with the outcome.** What the viewer gets, first; the
-  impressive number or constraint last.
+- **The title names its subject.** A stranger reading only the title can tell
+  what they would be watching. Outcome-first is the default word order — what
+  the viewer gets, then the impressive number or constraint. When the title is
+  going somewhere people search, write the phrase they would type instead; it
+  names the subject just as precisely.
 - **Never hand-write `presentation.json`.** The manifest — cue positions, word
   timings, asset layout — is assembled at publish time. Writing one by hand
   produces a presentation that publishes fine and reveals on the wrong words.
