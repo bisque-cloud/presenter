@@ -85,7 +85,9 @@ import { Bisque } from "@bisquecloud/sdk";
 
 const bisque = new Bisque({ apiKey: process.env.BISQUE_API_KEY });
 const created = await bisque.presentations.create({ indexHtml });
-const { webUrl } = await bisque.presentations.waitUntilReady(created.presentationId);
+const { webUrl } = await bisque.presentations.waitUntilReady(
+  created.presentationId,
+);
 ```
 
 It lives in [`sdk/`](./sdk); the API it wraps is described at
@@ -115,6 +117,20 @@ npx skills add bisque-cloud/presenter
 It copies them into your agent's skills directory — `~/.claude/skills/` for
 Claude Code, `~/.agents/skills/` for Codex and Gemini. Then ask for a
 presentation, or invoke it directly with `/present`.
+
+### In VS Code and Cursor
+
+VS Code and Cursor connect to Bisque over MCP rather than installing the
+skills. Ask either editor for a presentation and you get back the same watch
+URL. One click adds the server:
+
+[![Add to VS Code](https://img.shields.io/badge/Add_to_VS_Code-007ACC?style=flat)](https://vscode.dev/redirect/mcp/install?name=bisque&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fbisque.cloud%2Fpresentations%2Fmcp%22%7D) [![Add to Cursor](https://img.shields.io/badge/Add_to_Cursor-000000?style=flat)](https://cursor.com/install-mcp?name=bisque&config=eyJ1cmwiOiJodHRwczovL2Jpc3F1ZS5jbG91ZC9wcmVzZW50YXRpb25zL21jcCJ9)
+
+Each badge adds a server called `bisque` pointing at
+`https://bisque.cloud/presentations/mcp`, and the editor walks you through
+sign-in the first time you use it. Bisque narrates on its side here, so there
+is no speech model to download. Any other MCP client takes the same URL over
+streamable HTTP.
 
 ### Manual install
 
