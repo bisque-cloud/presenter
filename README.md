@@ -12,6 +12,13 @@ Linux, and Windows. **`watch`** reads a published presentation — anyone's — 
 your agent can summarize it or answer questions about it. **`video`** turns any
 published presentation into an MP4 you can upload; it runs on macOS.
 
+```sh
+npx skills add bisque-cloud/presenter
+```
+
+That installs all three into your agent's skills directory. The Claude Code
+plugin, VS Code and Cursor are further down under [Install](#install).
+
 ## How it works
 
 1. Ask your agent for a presentation — a briefing on your repo, a walkthrough
