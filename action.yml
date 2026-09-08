@@ -212,5 +212,8 @@ runs:
         REPO: ${{ github.repository }}
         TAG: ${{ steps.source.outputs.tag }}
         PR_NUMBER: ${{ steps.source.outputs.pr-number }}
+        TITLE: ${{ steps.source.outputs.title }}
         WATCH_URL: ${{ steps.publish.outputs.watch-url }}
+        PRESENTATION_ID: ${{ steps.publish.outputs.presentation-id }}
+        BISQUE_USER_ID: ${{ inputs.bisque-user-id }}
       run: node "${{ github.action_path }}/action/src/post-watch-link.ts"

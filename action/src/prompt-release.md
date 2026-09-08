@@ -37,6 +37,29 @@ all of it before writing. Its rules are mandatory: both layout blocks on every s
 
 Target length: 6 to 10 slides, 2 to 3 minutes narrated.
 
+## Design
+
+The presentation is watched on a phone as often as a laptop, so the two
+failures that ruin it are small type and the same layout every slide.
+
+**Type.** The stage is 1920 by 1080 pixels and the player scales it down, so
+author in pixels at that size and go bigger than feels right. A display line
+is 72 to 110 px. A slide heading is 60 to 90 px. Body copy is 32 to 44 px.
+The smallest text on any slide, including labels and chrome, is 21 px.
+Anything under 20 px is unreadable on a phone and is a defect.
+
+**Composition.** Give each section a different arrangement. A title slide, a
+full-bleed statement, a two-column split, a single large number, a code
+panel, a list of rows — pick the shape that fits the point rather than
+repeating one template. If two consecutive slides have the same skeleton,
+rebuild one of them.
+
+**A design system, taken from the subject.** Before writing slides, commit to
+a palette of four to six colours and a real display typeface, and take both
+from the project this belongs to rather than a generic template. Hold them
+for every slide. `spec.md` carries the full guidance; read its design
+section before you write any HTML, not after.
+
 ## What to write
 
 - `out/index.html` — the presentation
