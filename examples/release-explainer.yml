@@ -1,0 +1,24 @@
+# Every published release gets a narrated explainer, linked from the release
+# notes. `model` is any provider/model id from https://models.dev, and
+# `api-key` is that provider's key. Authoring runs on your key, narration
+# runs on this runner, and the Bisque key only names the channel the page
+# lands on.
+name: Release explainer
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write # append the watch link to the release notes
+
+jobs:
+  explain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: bisque-cloud/presenter@v1
+        with:
+          model: anthropic/claude-sonnet-4-6
+          api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          bisque-api-key: ${{ secrets.BISQUE_API_KEY }}
+          bisque-user-id: ${{ secrets.BISQUE_USER_ID }}

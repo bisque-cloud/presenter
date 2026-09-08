@@ -112,6 +112,56 @@ const { webUrl } = await bisque.presentations.waitUntilReady(
 It lives in [`sdk/`](./sdk); the API it wraps is described at
 [bisque.today/openapi.json](https://bisque.today/openapi.json).
 
+## On every release, from GitHub Actions
+
+This repo is also a GitHub Action. Add one step to a workflow and every
+release you publish gets a narrated explainer, made by the model you already
+pay for, with the watch link appended to the release notes for the people
+deciding whether to upgrade:
+
+```yaml
+on:
+  release:
+    types: [published]
+permissions:
+  contents: write # append the watch link to the release notes
+jobs:
+  explain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: bisque-cloud/presenter@v1
+        with:
+          model: anthropic/claude-sonnet-4-6
+          api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          bisque-api-key: ${{ secrets.BISQUE_API_KEY }}
+          bisque-user-id: ${{ secrets.BISQUE_USER_ID }}
+```
+
+`model` is any `provider/model` id from [models.dev](https://models.dev), so
+`openai/gpt-5.6-terra`, `google/gemini-3.6-flash` and `xai/grok-4.3` are the
+same one-line change. [OpenCode](https://opencode.ai) runs the model, so a new
+model needs no new release of this action.
+
+The agent reads the release notes and the diff since the previous tag through
+the API, authors the presentation with the `present` skill from this same
+checkout, and stops. The action then narrates on the runner and publishes.
+Authoring is one model run on your key; narration, publishing and hosting are
+free. A private repository's explainer is unlisted unless you say otherwise.
+
+The agent never holds a credential. Its model calls go through a local proxy
+that holds your key and rewrites the auth header, so the key is in no
+environment the agent or its tools can read, and the publishing step refuses
+to run a skill whose hash changed while the agent ran.
+
+The same step explains a pull request when a collaborator comments `/explain`
+on it, after a step checks they have write access. A pull request is text you
+did not write, so on a repository that takes them from strangers, set
+`network: deny`: the agent then has no shell and no internet, which costs the
+fonts and images it would have downloaded.
+
+Both workflows are in [`examples/`](./examples), and every input is described
+in [`action.yml`](./action.yml).
+
 ## Install
 
 Both plugins live in one marketplace. In Claude Code:

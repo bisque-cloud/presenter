@@ -1,0 +1,41 @@
+# Comment `/explain` on a pull request and get a narrated walkthrough of it
+# for the reviewers. The first step checks the commenter's actual repository
+# permission, so the model key is spent only on request and only by people
+# who could merge the pull request.
+#
+# A pull request from a stranger is text you did not write. On a repository
+# that takes those, add `network: deny` below: the agent then has no shell
+# and no internet, which costs downloaded fonts and images.
+name: Pull request explainer
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write # post the watch link as a comment
+
+jobs:
+  explain:
+    if: >-
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/explain')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require write access
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          perm="$(gh api "repos/${{ github.repository }}/collaborators/${{ github.actor }}/permission" --jq .permission)"
+          case "$perm" in
+            write|maintain|admin) echo "${{ github.actor }}: $perm" ;;
+            *) echo "::error::${{ github.actor }} has '$perm' permission; /explain needs write."; exit 1 ;;
+          esac
+      - uses: bisque-cloud/presenter@v1
+        with:
+          source: pull-request
+          model: anthropic/claude-sonnet-4-6
+          api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          bisque-api-key: ${{ secrets.BISQUE_API_KEY }}
+          bisque-user-id: ${{ secrets.BISQUE_USER_ID }}

@@ -1,0 +1,5 @@
+{
+  "type": "module",
+  "private": true,
+  "description": "The Release Explainer action steps are ES modules; this tells Node so without a build step."
+}
