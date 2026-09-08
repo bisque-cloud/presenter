@@ -38,26 +38,18 @@ Target length: 8 to 12 slides, 2 to 4 minutes narrated.
 
 ## Design
 
-The presentation is watched on a phone as often as a laptop, so the two
-failures that ruin it are small type and the same layout every slide.
+Watched on a phone as often as a laptop, so type that looks fine in your
+editor can be unreadable to the viewer. The stage is 1920 by 1080 pixels and
+the player scales it down: nothing on a slide sits under 21 px, and display
+lines want to be far bigger than feels right at that size. Text under 20 px
+is a defect rather than a style.
 
-**Type.** The stage is 1920 by 1080 pixels and the player scales it down, so
-author in pixels at that size and go bigger than feels right. A display line
-is 72 to 110 px. A slide heading is 60 to 90 px. Body copy is 32 to 44 px.
-The smallest text on any slide, including labels and chrome, is 21 px.
-Anything under 20 px is unreadable on a phone and is a defect.
-
-**Composition.** Give each section a different arrangement. A title slide, a
-full-bleed statement, a two-column split, a single large number, a code
-panel, a list of rows — pick the shape that fits the point rather than
-repeating one template. If two consecutive slides have the same skeleton,
-rebuild one of them.
-
-**A design system, taken from the subject.** Before writing slides, commit to
-a palette of four to six colours and a real display typeface, and take both
-from the project this belongs to rather than a generic template. Hold them
-for every slide. `spec.md` carries the full guidance; read its design
-section before you write any HTML, not after.
+Past that floor the look is yours, and it should come from the project this
+belongs to rather than a house template. `spec.md` carries the guidance;
+read its design section before you write HTML, not after. The one thing it
+asks for that is easy to skip: let the composition change with what each
+slide is saying, so two slides in a row with the same skeleton means one of
+them was not designed.
 
 ## What to write
 
