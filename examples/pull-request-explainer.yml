@@ -39,7 +39,6 @@ jobs:
       - uses: bisque-cloud/presenter@v1
         with:
           source: pull-request
-          model: anthropic/claude-sonnet-4-6
-          api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           bisque-api-key: ${{ secrets.BISQUE_API_KEY }}
           bisque-user-id: ${{ secrets.BISQUE_USER_ID }}

@@ -19,20 +19,19 @@ import { spawnSync } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fail, workDir } from "./action-step.ts";
-import { proxyUpstream, providerOf } from "./model-provider.ts";
+import { providerOf } from "./model-provider.ts";
 
 const work = workDir();
+// Resolved by the proxy step, which is the only place the keys are read.
 const model = process.env.MODEL ?? "";
+const variant = process.env.VARIANT ?? "";
+const basePath = process.env.BASE_PATH ?? "";
 const port = process.env.PROXY_PORT ?? "";
 const actionPath = process.env.ACTION_PATH ?? "";
 
-if (!model.includes("/")) {
-  fail(`model must be provider/model, like anthropic/claude-sonnet-4-6; got '${model}'. See https://models.dev for the catalog.`);
-}
+if (!model.includes("/")) fail(`the proxy step resolved no model; got '${model}'`);
 if (!port) fail("the key proxy is not running; the proxy start step must run before this one");
-
 const provider = providerOf(model);
-const upstream = proxyUpstream(provider);
 
 // Everything OpenCode needs, inline: no config file on disk for the agent
 // to read or edit. The key here is a placeholder; the proxy holds the real
@@ -46,7 +45,7 @@ const config = {
   provider: {
     [provider]: {
       options: {
-        baseURL: `http://127.0.0.1:${port}${upstream.basePath}`,
+        baseURL: `http://127.0.0.1:${port}${basePath}`,
         apiKey: "placeholder-held-by-key-proxy",
       },
     },
@@ -79,7 +78,7 @@ if (network === "deny") {
 // Default (formatted) output, not JSON: this goes straight into the job
 // log, where a maintainer reads what the agent did. Nothing parses it.
 const args = ["run", "--model", model];
-if (process.env.VARIANT) args.push("--variant", process.env.VARIANT);
+if (variant) args.push("--variant", variant);
 args.push("Read TASK.md and do what it says.");
 
 const r = spawnSync("opencode", args, {

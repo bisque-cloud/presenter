@@ -12,7 +12,7 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fail, output, workDir } from "./action-step.ts";
-import { providerOf, proxyUpstream } from "./model-provider.ts";
+import { keysFromEnv, resolveRun, specFor } from "./model-provider.ts";
 
 const work = workDir();
 mkdirSync(work, { recursive: true });
@@ -20,19 +20,13 @@ const pidfile = join(work, "key-proxy.pid");
 const logfile = join(work, "key-proxy.log");
 
 async function start(): Promise<void> {
-  const model = process.env.MODEL ?? "";
-  if (!model.includes("/")) {
-    fail(`model must be provider/model, like anthropic/claude-sonnet-4-6; got '${model}'. See https://models.dev for the catalog.`);
-  }
-  const provider = providerOf(model);
-  let upstream;
-  try {
-    upstream = proxyUpstream(provider);
-  } catch (err) {
-    fail(err instanceof Error ? err.message : String(err));
-  }
-  const key = process.env.API_KEY ?? "";
-  if (!key) fail(`api-key is empty. It is the key for '${provider}', normally read from ${upstream.envVar}.`);
+  // The key that was supplied decides the provider, and the provider decides
+  // the model unless one was named. Resolving here means the agent step is
+  // handed a decision rather than making it again.
+  const run = resolveRun(keysFromEnv(process.env), process.env.MODEL ?? "", process.env.VARIANT ?? "");
+  if ("error" in run) fail(run.error);
+  const { provider, model, variant, key } = run;
+  const upstream = specFor(provider);
 
   // The proxy's own environment carries no key: it arrives over stdin.
   const env = { ...process.env };
@@ -67,7 +61,10 @@ async function start(): Promise<void> {
   writeFileSync(pidfile, String(child.pid));
   output("port", port);
   output("provider", provider);
-  console.log(`key proxy for ${provider} on 127.0.0.1:${port} (pid ${child.pid})`);
+  output("model", model);
+  output("variant", variant);
+  output("base-path", upstream.basePath);
+  console.log(`${model}${variant ? ` (${variant})` : ""} — key proxy on 127.0.0.1:${port} (pid ${child.pid})`);
 }
 
 function stop(): void {

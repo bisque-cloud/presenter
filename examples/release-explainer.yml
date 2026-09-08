@@ -1,8 +1,8 @@
 # Every published release gets a narrated explainer, linked from the release
-# notes. `model` is any provider/model id from https://models.dev, and
-# `api-key` is that provider's key. Authoring runs on your key, narration
-# runs on this runner, and the Bisque key only names the channel the page
-# lands on.
+# notes. Set one provider key and the action picks that provider's best
+# model for the job; add `model:` to name a different one. Authoring runs on
+# your key, narration runs on this runner, and the Bisque key only names the
+# channel the page lands on.
 name: Release explainer
 
 on:
@@ -18,7 +18,6 @@ jobs:
     steps:
       - uses: bisque-cloud/presenter@v1
         with:
-          model: anthropic/claude-sonnet-4-6
-          api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           bisque-api-key: ${{ secrets.BISQUE_API_KEY }}
           bisque-user-id: ${{ secrets.BISQUE_USER_ID }}

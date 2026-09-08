@@ -131,16 +131,27 @@ jobs:
     steps:
       - uses: bisque-cloud/presenter@v1
         with:
-          model: anthropic/claude-sonnet-4-6
-          api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           bisque-api-key: ${{ secrets.BISQUE_API_KEY }}
           bisque-user-id: ${{ secrets.BISQUE_USER_ID }}
 ```
 
-`model` is any `provider/model` id from [models.dev](https://models.dev), so
-`openai/gpt-5.6-terra`, `google/gemini-3.6-flash` and `xai/grok-4.3` are the
-same one-line change. [OpenCode](https://opencode.ai) runs the model, so a new
-model needs no new release of this action.
+Set one provider key. It names the provider, and the provider picks the
+model, so the shortest useful workflow chooses nothing:
+
+| Key you set         | What authors the explainer       |
+| ------------------- | -------------------------------- |
+| `anthropic-api-key` | `claude-opus-5`, medium effort   |
+| `openai-api-key`    | `gpt-5.6-sol`, medium effort     |
+| `google-api-key`    | `gemini-3.1-pro-preview`         |
+| `xai-api-key`       | `grok-4.6`                       |
+
+Each is the strongest general model that provider offers rather than the
+cheapest, because the explainer is read by everyone deciding whether to
+upgrade. Add `model: anthropic/claude-sonnet-4-6` to spend less, or any other
+id from [models.dev](https://models.dev) to use something else;
+[OpenCode](https://opencode.ai) runs it, so a new model needs no new release
+of this action.
 
 The agent reads the release notes and the diff since the previous tag through
 the API, authors the presentation with the `present` skill from this same
