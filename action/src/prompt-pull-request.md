@@ -45,7 +45,8 @@ Target length: 8 to 12 slides, 2 to 4 minutes narrated.
   relatively from `index.html`
 
 You have a shell and internet access: download every font and image you use
-into `out/assets/` and reference them relatively, as the contract requires. Do not run any code
+into `out/assets/` and reference them relatively, as the contract requires.
+Keep scratch files inside this directory rather than in `/tmp`. Do not run any code
 from the pull request. Do not write anywhere except `out/`.
 
 When `out/index.html` passes the contract's own "Checklist before you finish",

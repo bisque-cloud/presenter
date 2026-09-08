@@ -54,11 +54,17 @@ const config = {
 };
 
 const network = (process.env.NETWORK ?? "allow") === "deny" ? "deny" : "allow";
+// Anything outside the working directory is denied except the temp
+// directories, which a model reaches for when it stages a download before
+// unpacking it into out/assets. Broad rules first, narrow last: OpenCode
+// evaluates the last match.
+const tmp = (process.env.TMPDIR ?? "/tmp").replace(/\/$/, "");
 const permission = {
   bash: network,
   webfetch: network,
   // Nothing in the task needs a search engine.
   websearch: "deny",
+  external_directory: { "*": "deny", "/tmp/**": "allow", [`${tmp}/**`]: "allow" },
   edit: "allow",
   read: "allow",
   glob: "allow",
