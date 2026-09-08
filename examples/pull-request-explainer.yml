@@ -23,14 +23,18 @@ jobs:
       startsWith(github.event.comment.body, '/explain')
     runs-on: ubuntu-latest
     steps:
+      # Expressions go through the environment, never into the script text,
+      # per GitHub's security hardening guide.
       - name: Require write access
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
         run: |
-          perm="$(gh api "repos/${{ github.repository }}/collaborators/${{ github.actor }}/permission" --jq .permission)"
+          perm="$(gh api "repos/$REPO/collaborators/$ACTOR/permission" --jq .permission)"
           case "$perm" in
-            write|maintain|admin) echo "${{ github.actor }}: $perm" ;;
-            *) echo "::error::${{ github.actor }} has '$perm' permission; /explain needs write."; exit 1 ;;
+            write|maintain|admin) echo "$ACTOR: $perm" ;;
+            *) echo "::error::$ACTOR has '$perm' permission; /explain needs write."; exit 1 ;;
           esac
       - uses: bisque-cloud/presenter@v1
         with:
