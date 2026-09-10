@@ -40,6 +40,12 @@ inputs:
     description: Reasoning effort, where the provider has one (for example high, max, minimal).
     required: false
     default: ""
+  opencode-version:
+    description: >-
+      The OpenCode release that runs the model. Pinned so an upstream release
+      cannot change what this action does overnight; raise it deliberately.
+    required: false
+    default: "1.18.30"
 
   network:
     description: >-
@@ -129,21 +135,14 @@ runs:
         ACTION_PATH: ${{ github.action_path }}
       run: node "${{ github.action_path }}/action/src/install-and-verify-skill.ts" hash
 
-    - name: Cache OpenCode
-      id: opencode-cache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: ~/.opencode/bin
-        key: opencode-${{ runner.os }}-${{ runner.arch }}-v1
-
+    # A pinned npm release rather than `curl | bash`: the version is visible
+    # in the workflow, npm verifies the package, and an upstream release
+    # cannot change what this action does without an edit here.
     - name: Install OpenCode
-      if: steps.opencode-cache.outputs.cache-hit != 'true'
       shell: bash
-      run: curl -fsSL https://opencode.ai/install | bash
-
-    - name: Add OpenCode to PATH
-      shell: bash
-      run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
+      env:
+        OPENCODE_VERSION: ${{ inputs.opencode-version }}
+      run: npm install -g --no-fund --no-audit "opencode-ai@${OPENCODE_VERSION}"
 
     # The only step that holds the provider key. It hands the key to a local
     # proxy over stdin and exits, so the agent step below runs with no key in

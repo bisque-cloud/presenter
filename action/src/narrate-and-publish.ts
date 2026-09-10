@@ -3,9 +3,9 @@
 // and it runs a fresh copy of the skill whose hash it verifies first.
 import { execFileSync, spawnSync } from "node:child_process";
 import { cpSync, existsSync, readFileSync, rmSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { fail, output, run, warn, workDir } from "./action-step.ts";
+import { installBisqueVoice } from "./install-bisque-voice.ts";
 import { ghJson } from "./github-cli.ts";
 
 const work = workDir();
@@ -13,7 +13,6 @@ const out = join(work, "out");
 const actionPath = process.env.ACTION_PATH;
 const voice = process.env.VOICE || "kokoro:af_heart";
 let visibility = process.env.VISIBILITY || "";
-const bv = join(homedir(), ".bisque", "bin", "bisque-voice");
 
 // The skill copy the agent could reach is not the one that runs here.
 run("node", [new URL("./install-and-verify-skill.ts", import.meta.url).pathname, "verify"]);
@@ -25,7 +24,9 @@ const presentMjs = join(fresh, "scripts", "present.mjs");
 if (!voice.includes(":")) fail(`voice must be engine-qualified, like kokoro:af_heart; got '${voice}'. Run 'bisque-voice engines' for the engine ids.`);
 const engine = voice.split(":")[0];
 
-if (!existsSync(bv)) run("sh", ["-c", "curl -fsSL https://download.bisque.today/bisque-voice/install.sh | sh"]);
+// A pinned, checksummed tarball rather than a piped install script; see
+// install-bisque-voice.ts.
+const bv = installBisqueVoice();
 run(bv, ["--version"]);
 const engines = JSON.parse(execFileSync(bv, ["engines", "--json"], { encoding: "utf8" }));
 const hit = (Array.isArray(engines) ? engines : engines.engines || []).find((e) => e.id === engine);
