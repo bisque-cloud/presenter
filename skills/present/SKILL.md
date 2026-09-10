@@ -1,6 +1,6 @@
 ---
 name: present
-description: Authors a narrated presentation and publishes it to a shareable watch URL. Use when asked to make a presentation, slides, a video, a deck, a slideshow, a narrated briefing, or a talk.
+description: Authors a narrated presentation and publishes it to a shareable watch URL. Use when asked to make a presentation, slides, a video, a deck, a slideshow, a narrated briefing, or a talk — or when stacked after another skill's report, as in /retro /present.
 ---
 
 # Present
@@ -158,6 +158,23 @@ the parenthesis is only ever spoken.
 `node present.mjs plan --html index.html` shows exactly what will be spoken, per
 slide. Read it before synthesizing.
 
+### When the input is another skill's report
+
+Skills stack. Many skills end with a report in the terminal — gstack's
+`/retro`, `/qa`, `/autoplan`, `/cso`, and `/ship` all do — and a user can put
+`/present` on the same line: `/retro /present` presents the retrospective the
+moment it is written. Invoked this way, your material is the report already in
+the conversation, not the repository around it. Build the slides from the
+report; there is nothing extra to gather.
+
+A report like this names its finding somewhere inside it: the ship of the
+week, the bug that blocks release, the highest-severity issue, the verdict on
+the plan. Open on that finding, wherever it sits in the report — the first
+slide states the report's single most important conclusion, named
+specifically, never the file list, the metrics table, or a description of
+what was run. Then the reasoning, then the evidence. A viewer who stops after
+the first slide still leaves with the finding.
+
 ### Check pronunciations before synthesizing
 
 ```sh
@@ -185,6 +202,37 @@ is facts only — it flags nothing, and you judge every word:
 the `reason` field says why. That is not a pass — tell the user no automated
 check ran for that voice. Markers still work there, judged by ear.
 
+### Check contrast before publishing
+
+```sh
+node present.mjs contrast --html index.html
+```
+
+**Body copy needs 4.5:1 and display type over 32px needs 3:1, against every
+color its ground contains.** That is arithmetic, not taste, so the check does
+it for you: it reads the colors out of your `<style>` block, out of `design.md`
+if there is one, and out of every `data-background` — a flat color, a
+gradient's stops, or a `dither:` spec's palette — and measures each ink against
+the lightest and darkest color that ground can present. It launches nothing and
+takes no time.
+
+Three verdicts:
+
+- **`✗` — below the floor at both ends of its ground.** Unreadable wherever it
+  sits on the slide. Fix it: darken the ink, lighten the ground, or put the
+  passage on an opaque panel.
+- **`?` position** — clears the floor over part of the ground only, so whether
+  it reads depends on where the text lands. Look at that slide; a passage
+  crossing a varying ground belongs on a panel.
+- **`?` other** — the check could not place the text: it sits over an `<img>`,
+  or its ink is one a panel might rescue. Judge those yourself.
+
+The exit code fails on `✗` findings only. A run that measured nothing also
+fails, because that is not a pass.
+
+This is legibility (WCAG 2.2 §1.4.3), not accessibility. It says nothing about
+the rest of the page.
+
 ### Publishing into a company (bisque.team)
 
 If the user asks to publish for their team or company, add `--org <slug>`
@@ -201,8 +249,15 @@ node present.mjs publish --html index.html \
   --voice kokoro:af_heart \
   --title "Q3 Review" \
   --visibility unlisted \
+  --made-with "Claude Opus 5" \
   --context context.md
 ```
+
+Pass `--made-with` with **the model you are running as**, named the way a
+person says it ("Claude Opus 5", "GPT-5.4 mini", "Gemini 3 Pro"), not an API
+id. The narrating voice is added for you. Viewers can see the list in the watch
+page's ⋯ menu; it is never the focus of the page. If you genuinely do not know
+what model you are, leave the flag off rather than guessing.
 
 Add `--engine`/`--align` when more than one is installed, `--speed` (default
 1.0, valid range 0.7–1.2), `--handle`, `--slug`, `--design`,

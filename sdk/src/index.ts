@@ -147,6 +147,55 @@ export interface PublishNarratedResult {
   files: Array<Record<string, unknown>>;
 }
 
+/** What a creation needs to start: the document, and where it lives. */
+export interface CreatePresentationRunRequest {
+  indexHtml: string;
+  presentationId?: string;
+  slug?: string;
+  title?: string;
+  visibility?: Visibility;
+  handle?: string;
+  org?: string;
+  group?: string;
+  contextMd?: string;
+  designMd?: string;
+  madeWith?: string[];
+  assets?: Array<Record<string, unknown>>;
+}
+
+/** One slide's narration, as the synthesizer reported it. */
+export interface SlideAudioMetadata {
+  words: Array<{ word: string; start: number; end: number }>;
+  durationMs: number;
+  size: number;
+  /** "sha256:<64 hex>" of the MP3 bytes. */
+  hash: string;
+  exact?: boolean;
+  contentType?: string;
+}
+
+/** An open creation: the slides are already live at `webUrl`. */
+export interface PresentationRun {
+  presentationId: string;
+  creationId: string;
+  webUrl: string;
+  /** Slides that still need narrating, in order. */
+  needsAudio: string[];
+  /** Slides whose audio carried forward from the last time. */
+  reused: string[];
+  assetUploads: Array<Record<string, unknown>>;
+  audioUploads: Array<{ slideKey: string } & Record<string, unknown>>;
+}
+
+/** How much of the narration has landed. */
+export interface PresentationRunProgress {
+  presentationId: string;
+  total: number;
+  complete: number;
+  failed: number;
+  silentSlides?: string[];
+}
+
 export interface ListPresentationsParams {
   limit?: number;
   cursor?: string;
@@ -297,7 +346,7 @@ export class Bisque {
 
   /** Raw request with auth, retries, rate-limit capture, and error mapping. */
   async request<T>(
-    method: "GET" | "POST",
+    method: "GET" | "POST" | "PATCH",
     path: string,
     init: {
       query?: Record<string, string | number | undefined>;
@@ -452,7 +501,12 @@ export class Bisque {
       } while (cursor);
     }.bind(this),
 
-    /** Publish from HTML; narration is synthesized server-side. Poll `status`. */
+    /**
+     * Create from HTML and have the server narrate it. Poll `status`.
+     *
+     * The other mode is `startCreation`, where you narrate each slide
+     * yourself — free, unlimited, and the slides are viewable while you do.
+     */
     create: async (
       req: CreatePresentationRequest,
       opts: RequestOptions = {},
@@ -520,9 +574,78 @@ export class Bisque {
     },
 
     /**
-     * Publish with audio you synthesized yourself. Returns signed upload
-     * targets; PUT each file's bytes there, then POST `completeUrl` with
-     * the echoed `files`. API-key callers only.
+     * Create a presentation and put its slides up straight away.
+     *
+     * The slides are viewable at the returned `webUrl` from here on — silent
+     * until narration arrives — so a caller that synthesizes locally has a
+     * working link in seconds rather than minutes. Upload each asset to its
+     * target, then send each slide's narration with `addSlideAudio` as it is
+     * made, and `finalize` when they are all in.
+     *
+     * `needsAudio` names the slides that still need narrating: a slide whose
+     * text has not changed since the last time carries its audio forward, so
+     * an HTML-only edit needs no synthesis at all.
+     */
+    startCreation: async (
+      req: CreatePresentationRunRequest,
+      opts: RequestOptions = {},
+    ): Promise<PresentationRun> => {
+      const { data } = await this.request<PresentationRun>(
+        "POST",
+        "/v1/presentations",
+        {
+          body: req,
+          idempotencyKey: opts.idempotencyKey,
+          signal: opts.signal,
+          auth: "required",
+        },
+      );
+      return data;
+    },
+
+    /**
+     * Give one slide its narration. The bytes go to that slide's upload
+     * target first; this call is the metadata — word timings, duration and
+     * digest — and it is what makes the slide play. Anyone watching sees it
+     * appear without reloading.
+     */
+    addSlideAudio: async (
+      presentationId: string,
+      slideKey: string,
+      audio: SlideAudioMetadata,
+      opts: RequestOptions = {},
+    ): Promise<PresentationRunProgress> => {
+      const { data } = await this.request<PresentationRunProgress>(
+        "PATCH",
+        `/v1/presentations/${encodeURIComponent(presentationId)}/slides/${encodeURIComponent(slideKey)}`,
+        { body: audio, signal: opts.signal, auth: "required" },
+      );
+      return data;
+    },
+
+    /**
+     * Finish the creation: this is the moment it claims a version number and
+     * stops being a work in progress. Slides still without audio stay silent
+     * and are named in `silentSlides`.
+     */
+    finalize: async (
+      presentationId: string,
+      opts: RequestOptions = {},
+    ): Promise<PresentationRunProgress> => {
+      const { data } = await this.request<PresentationRunProgress>(
+        "POST",
+        `/v1/presentations/${encodeURIComponent(presentationId)}:finalize`,
+        { body: {}, signal: opts.signal, auth: "required" },
+      );
+      return data;
+    },
+
+    /**
+     * Publish with audio you synthesized yourself, in one call.
+     *
+     * @deprecated Use `create` + `addSlideAudio` + `finalize`. This publishes
+     * nothing until every slide is narrated, so the link does not work until
+     * the whole run finishes. It keeps working; it is just the slower shape.
      */
     publishNarrated: async (
       req: PublishNarratedRequest,
