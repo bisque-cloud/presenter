@@ -202,37 +202,6 @@ is facts only — it flags nothing, and you judge every word:
 the `reason` field says why. That is not a pass — tell the user no automated
 check ran for that voice. Markers still work there, judged by ear.
 
-### Check contrast before publishing
-
-```sh
-node present.mjs contrast --html index.html
-```
-
-**Body copy needs 4.5:1 and display type over 32px needs 3:1, against every
-color its ground contains.** That is arithmetic, not taste, so the check does
-it for you: it reads the colors out of your `<style>` block, out of `design.md`
-if there is one, and out of every `data-background` — a flat color, a
-gradient's stops, or a `dither:` spec's palette — and measures each ink against
-the lightest and darkest color that ground can present. It launches nothing and
-takes no time.
-
-Three verdicts:
-
-- **`✗` — below the floor at both ends of its ground.** Unreadable wherever it
-  sits on the slide. Fix it: darken the ink, lighten the ground, or put the
-  passage on an opaque panel.
-- **`?` position** — clears the floor over part of the ground only, so whether
-  it reads depends on where the text lands. Look at that slide; a passage
-  crossing a varying ground belongs on a panel.
-- **`?` other** — the check could not place the text: it sits over an `<img>`,
-  or its ink is one a panel might rescue. Judge those yourself.
-
-The exit code fails on `✗` findings only. A run that measured nothing also
-fails, because that is not a pass.
-
-This is legibility (WCAG 2.2 §1.4.3), not accessibility. It says nothing about
-the rest of the page.
-
 ### Publishing into a company (bisque.team)
 
 If the user asks to publish for their team or company, add `--org <slug>`
