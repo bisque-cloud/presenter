@@ -9,7 +9,11 @@
 // key then never appears in this process's environment block), or the name
 // of an environment variable (for tests). Prints the port it chose on
 // stdout, once, then serves until killed.
-import { createServer, request as httpRequest, type IncomingHttpHeaders } from "node:http";
+import {
+  createServer,
+  request as httpRequest,
+  type IncomingHttpHeaders,
+} from "node:http";
 import { request as httpsRequest } from "node:https";
 import { readFileSync } from "node:fs";
 import { URL } from "node:url";
@@ -26,7 +30,9 @@ if (keySource === "-") {
   key = process.env[keySource] ?? "";
 }
 if (!upstream || !headerName || !key) {
-  console.error("usage: key-proxy-server.ts <upstream-origin> <header-name> <-|ENV_VAR> [prefix]");
+  console.error(
+    "usage: key-proxy-server.ts <upstream-origin> <header-name> <-|ENV_VAR> [prefix]",
+  );
   process.exit(2);
 }
 const up = new URL(upstream);
@@ -51,7 +57,11 @@ const server = createServer((req, res) => {
       hostname: up.hostname,
       port: up.port || (up.protocol === "https:" ? 443 : 80),
       method: req.method,
-      path: (up.pathname.replace(/\/$/, "") + url.pathname).replace(/\/{2,}/g, "/") + url.search,
+      path:
+        (up.pathname.replace(/\/$/, "") + url.pathname).replace(
+          /\/{2,}/g,
+          "/",
+        ) + url.search,
       headers,
     },
     (upRes) => {

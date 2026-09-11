@@ -29,8 +29,12 @@ const basePath = process.env.BASE_PATH ?? "";
 const port = process.env.PROXY_PORT ?? "";
 const actionPath = process.env.ACTION_PATH ?? "";
 
-if (!model.includes("/")) fail(`the proxy step resolved no model; got '${model}'`);
-if (!port) fail("the key proxy is not running; the proxy start step must run before this one");
+if (!model.includes("/"))
+  fail(`the proxy step resolved no model; got '${model}'`);
+if (!port)
+  fail(
+    "the key proxy is not running; the proxy start step must run before this one",
+  );
 const provider = providerOf(model);
 
 // Everything OpenCode needs, inline: no config file on disk for the agent
@@ -63,7 +67,11 @@ const permission = {
   webfetch: network,
   // Nothing in the task needs a search engine.
   websearch: "deny",
-  external_directory: { "*": "deny", "/tmp/**": "allow", [`${tmp}/**`]: "allow" },
+  external_directory: {
+    "*": "deny",
+    "/tmp/**": "allow",
+    [`${tmp}/**`]: "allow",
+  },
   edit: "allow",
   read: "allow",
   glob: "allow",
@@ -72,7 +80,9 @@ const permission = {
   skill: "allow",
 };
 if (network === "deny") {
-  console.log("network: deny — the agent cannot download fonts or images, so the presentation will use system font stacks");
+  console.log(
+    "network: deny — the agent cannot download fonts or images, so the presentation will use system font stacks",
+  );
 }
 
 // Default (formatted) output, not JSON: this goes straight into the job
@@ -105,6 +115,8 @@ if (r.status !== 0) fail(`opencode exited with status ${r.status}`);
 // the job, so the output is what decides.
 const html = join(work, "out", "index.html");
 if (!existsSync(html) || statSync(html).size === 0) {
-  fail("The agent finished without writing out/index.html. See the log above for what it did instead.");
+  fail(
+    "The agent finished without writing out/index.html. See the log above for what it did instead.",
+  );
 }
 console.log(`${model} wrote out/index.html (${statSync(html).size} bytes)`);

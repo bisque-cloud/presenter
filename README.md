@@ -139,12 +139,12 @@ jobs:
 Set one provider key. It names the provider, and the provider picks the
 model, so the shortest useful workflow chooses nothing:
 
-| Key you set         | What authors the explainer       |
-| ------------------- | -------------------------------- |
-| `anthropic-api-key` | `claude-opus-5`, medium effort   |
-| `openai-api-key`    | `gpt-5.6-sol`, medium effort     |
-| `google-api-key`    | `gemini-3.1-pro-preview`         |
-| `xai-api-key`       | `grok-4.6`                       |
+| Key you set         | What authors the explainer     |
+| ------------------- | ------------------------------ |
+| `anthropic-api-key` | `claude-opus-5`, medium effort |
+| `openai-api-key`    | `gpt-5.6-sol`, medium effort   |
+| `google-api-key`    | `gemini-3.1-pro-preview`       |
+| `xai-api-key`       | `grok-4.6`                     |
 
 Each is the strongest general model that provider offers rather than the
 cheapest, because the explainer is read by everyone deciding whether to

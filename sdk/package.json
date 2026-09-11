@@ -1,7 +1,7 @@
 {
   "name": "@bisquecloud/sdk",
   "version": "0.2.0",
-  "description": "Official TypeScript SDK for the Bisque API: create narrated presentations from a program \u2014 the slides go up first and each slide's narration follows \u2014 and read any shared one back as text.",
+  "description": "Official TypeScript SDK for the Bisque API: create narrated presentations from a program — the slides go up first and each slide's narration follows — and read any shared one back as text.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",

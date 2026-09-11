@@ -15,7 +15,8 @@ import { fail, output } from "./action-step.ts";
 
 const actionPath = process.env.ACTION_PATH ?? "";
 const skill = join(actionPath, "skills", "present");
-if (!existsSync(join(skill, "SKILL.md"))) fail("skills/present is missing from the action checkout");
+if (!existsSync(join(skill, "SKILL.md")))
+  fail("skills/present is missing from the action checkout");
 
 /** A stable SHA-256 over every file under the skill, by relative path and content. */
 export function treeHash(root: string = skill): string {
@@ -46,7 +47,9 @@ if (cmd === "hash") {
 } else if (cmd === "verify") {
   const h = treeHash();
   if (h !== process.env.EXPECTED_HASH) {
-    fail(`The present skill in the action checkout changed during the agent step (expected ${process.env.EXPECTED_HASH || "?"}, got ${h}). Refusing to publish with it.`);
+    fail(
+      `The present skill in the action checkout changed during the agent step (expected ${process.env.EXPECTED_HASH || "?"}, got ${h}). Refusing to publish with it.`,
+    );
   }
   console.log("skill unchanged since before the agent ran");
 } else if (cmd) {

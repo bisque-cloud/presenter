@@ -46,7 +46,9 @@ const created = await bisque.presentations.create({
 });
 
 // 3. Narration finishes in the background; wait for it.
-const status = await bisque.presentations.waitUntilReady(created.presentationId);
+const status = await bisque.presentations.waitUntilReady(
+  created.presentationId,
+);
 console.log(status.webUrl); // https://bisque.today/p/<handle>/release-notes-2026-08
 ```
 
@@ -56,20 +58,20 @@ of publishing twice.
 
 ## Everything else
 
-| Call | What it does |
-| --- | --- |
-| `presentations.spec(part?)` | The format, or one module of it (`charts`, `macos`, …), as markdown. |
-| `presentations.context(ref)` | Metadata, per-slide transcript, and `context.md` for any shared presentation. |
-| `presentations.list(params?)` / `listAll()` | Your presentations, one page or every page. |
-| `presentations.create(req)` | Create from HTML and have the server narrate it. |
-| `presentations.status(id)` / `waitUntilReady(id)` | Narration and publish progress. |
-| `presentations.startCreation(req)` | Create from HTML and narrate it yourself. The slides are viewable immediately, silent. |
-| `presentations.addSlideAudio(id, slideKey, audio)` | Give one slide its narration; anyone watching sees it appear. |
-| `presentations.finalize(id)` | Finish the creation and claim its version. |
-| `presentations.publishNarrated(req)` | Deprecated. One call, but nothing is viewable until every slide is narrated. |
-| `oembed(url)` | The oEmbed payload for a watch URL. |
-| `ask(query)` | A natural-language question over the docs and public presentations (NLWeb). |
-| `openapi()` | The OpenAPI 3.1 document this SDK wraps. |
+| Call                                               | What it does                                                                           |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `presentations.spec(part?)`                        | The format, or one module of it (`charts`, `macos`, …), as markdown.                   |
+| `presentations.context(ref)`                       | Metadata, per-slide transcript, and `context.md` for any shared presentation.          |
+| `presentations.list(params?)` / `listAll()`        | Your presentations, one page or every page.                                            |
+| `presentations.create(req)`                        | Create from HTML and have the server narrate it.                                       |
+| `presentations.status(id)` / `waitUntilReady(id)`  | Narration and publish progress.                                                        |
+| `presentations.startCreation(req)`                 | Create from HTML and narrate it yourself. The slides are viewable immediately, silent. |
+| `presentations.addSlideAudio(id, slideKey, audio)` | Give one slide its narration; anyone watching sees it appear.                          |
+| `presentations.finalize(id)`                       | Finish the creation and claim its version.                                             |
+| `presentations.publishNarrated(req)`               | Deprecated. One call, but nothing is viewable until every slide is narrated.           |
+| `oembed(url)`                                      | The oEmbed payload for a watch URL.                                                    |
+| `ask(query)`                                       | A natural-language question over the docs and public presentations (NLWeb).            |
+| `openapi()`                                        | The OpenAPI 3.1 document this SDK wraps.                                               |
 
 Every method takes an optional `{ signal }` for cancellation.
 

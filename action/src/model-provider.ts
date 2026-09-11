@@ -101,35 +101,56 @@ export function providerOf(model: string): string {
 export function specFor(provider: string): ProviderSpec {
   const spec = BY_ID.get(provider as Provider);
   if (!spec) {
-    throw new Error(`This action has no route for provider '${provider}'. It supports ${PROVIDERS.map(([p]) => p).join(", ")}.`);
+    throw new Error(
+      `This action has no route for provider '${provider}'. It supports ${PROVIDERS.map(([p]) => p).join(", ")}.`,
+    );
   }
   return spec;
 }
 
-export type Resolved = { provider: Provider; model: string; variant: string; key: string };
+export type Resolved = {
+  provider: Provider;
+  model: string;
+  variant: string;
+  key: string;
+};
 
 /**
  * Work out what to run from the keys that were supplied and the optional
  * `model` and `variant` overrides. `keys` is the provider id mapped to
  * whatever that input held; empty strings count as absent.
  */
-export function resolveRun(keys: Partial<Record<Provider, string>>, model = "", variant = ""): Resolved | { error: string } {
+export function resolveRun(
+  keys: Partial<Record<Provider, string>>,
+  model = "",
+  variant = "",
+): Resolved | { error: string } {
   const supplied = PROVIDERS.filter(([p]) => (keys[p] ?? "").trim().length > 0);
   const inputs = PROVIDERS.map(([, s]) => s.input).join(", ");
 
   if (supplied.length === 0) {
-    return { error: `Set one provider key: ${inputs}. The key decides which model authors the explainer.` };
+    return {
+      error: `Set one provider key: ${inputs}. The key decides which model authors the explainer.`,
+    };
   }
 
   if (model) {
     if (!model.includes("/")) {
-      return { error: `model must be provider/model, like anthropic/${BY_ID.get("anthropic")!.defaultModel}; got '${model}'. See https://models.dev for the catalog.` };
+      return {
+        error: `model must be provider/model, like anthropic/${BY_ID.get("anthropic")!.defaultModel}; got '${model}'. See https://models.dev for the catalog.`,
+      };
     }
     const p = providerOf(model) as Provider;
     const spec = BY_ID.get(p);
-    if (!spec) return { error: `This action has no route for provider '${p}'. It supports ${PROVIDERS.map(([x]) => x).join(", ")}.` };
+    if (!spec)
+      return {
+        error: `This action has no route for provider '${p}'. It supports ${PROVIDERS.map(([x]) => x).join(", ")}.`,
+      };
     const key = (keys[p] ?? "").trim();
-    if (!key) return { error: `model is '${model}' but ${spec.input} is empty. The key has to match the model's provider.` };
+    if (!key)
+      return {
+        error: `model is '${model}' but ${spec.input} is empty. The key has to match the model's provider.`,
+      };
     return { provider: p, model, variant: variant || spec.defaultVariant, key };
   }
 
@@ -144,7 +165,9 @@ export function resolveRun(keys: Partial<Record<Provider, string>>, model = "", 
 }
 
 /** Read the four key inputs out of the step environment. */
-export function keysFromEnv(env: Record<string, string | undefined>): Partial<Record<Provider, string>> {
+export function keysFromEnv(
+  env: Record<string, string | undefined>,
+): Partial<Record<Provider, string>> {
   return {
     anthropic: env.ANTHROPIC_API_KEY ?? "",
     openai: env.OPENAI_API_KEY ?? "",

@@ -24,7 +24,11 @@ export function output(name: string, value: string): void {
 }
 
 /** Run a command with inherited stdio; fail the step on a non-zero exit. */
-export function run(cmd: string, args: string[], opts: SpawnSyncOptions = {}): void {
+export function run(
+  cmd: string,
+  args: string[],
+  opts: SpawnSyncOptions = {},
+): void {
   const r = spawnSync(cmd, args, { stdio: "inherit", ...opts });
   if (r.error) fail(`${cmd}: ${r.error.message}`);
   if (r.status !== 0) fail(`${cmd} exited with status ${r.status}`);
@@ -32,5 +36,7 @@ export function run(cmd: string, args: string[], opts: SpawnSyncOptions = {}): v
 
 /** This action's working directory for the job, under the runner's temp. */
 export function workDir(): string {
-  return process.env.WORK || `${process.env.RUNNER_TEMP || "/tmp"}/release-explainer`;
+  return (
+    process.env.WORK || `${process.env.RUNNER_TEMP || "/tmp"}/release-explainer`
+  );
 }

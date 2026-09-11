@@ -38,7 +38,11 @@ export function isGenerated(filename: string): boolean {
   return GENERATED.some((re) => re.test(filename));
 }
 
-export function selectDiff(files: ChangedFile[], perFileCap = PER_FILE_CAP, totalCap = TOTAL_CAP): DiffSelection {
+export function selectDiff(
+  files: ChangedFile[],
+  perFileCap = PER_FILE_CAP,
+  totalCap = TOTAL_CAP,
+): DiffSelection {
   const parts: string[] = [];
   const skipped: DiffSelection["skipped"] = [];
   const cut: string[] = [];
@@ -49,7 +53,10 @@ export function selectDiff(files: ChangedFile[], perFileCap = PER_FILE_CAP, tota
       continue;
     }
     if (!f.patch) {
-      skipped.push({ filename: f.filename, reason: "no text diff (binary or too large for GitHub to return)" });
+      skipped.push({
+        filename: f.filename,
+        reason: "no text diff (binary or too large for GitHub to return)",
+      });
       continue;
     }
     if (used >= totalCap) {
@@ -58,7 +65,9 @@ export function selectDiff(files: ChangedFile[], perFileCap = PER_FILE_CAP, tota
     }
     let body = f.patch;
     if (body.length > perFileCap) {
-      body = body.slice(0, perFileCap) + `\n[... ${f.patch.length - perFileCap} more bytes of this file's diff not shown]`;
+      body =
+        body.slice(0, perFileCap) +
+        `\n[... ${f.patch.length - perFileCap} more bytes of this file's diff not shown]`;
       cut.push(f.filename);
     }
     const part = `diff --git a/${f.filename} b/${f.filename}\n${body}`;
@@ -73,7 +82,8 @@ export function describeOmissions(sel: DiffSelection): string {
   if (sel.skipped.length === 0 && sel.cut.length === 0) return "";
   const lines = ["", "## Not fully in diff.patch", ""];
   for (const s of sel.skipped) lines.push(`- ${s.filename}: ${s.reason}`);
-  for (const c of sel.cut) lines.push(`- ${c}: shown up to ${PER_FILE_CAP} bytes`);
+  for (const c of sel.cut)
+    lines.push(`- ${c}: shown up to ${PER_FILE_CAP} bytes`);
   lines.push("");
   return lines.join("\n");
 }

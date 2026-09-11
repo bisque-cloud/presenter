@@ -17,17 +17,29 @@ const title = process.env.TITLE ?? "this release";
  * The poster is the presentation's Open Graph image, already rendered by the
  * publish step. Without the ids to build that URL, the link alone is used.
  */
-export function watchBlock(user: string, id: string, url = watchUrl, subject = title): string {
+export function watchBlock(
+  user: string,
+  id: string,
+  url = watchUrl,
+  subject = title,
+): string {
   const link = `[Watch the explainer](${url})`;
   if (!id || !user) return `---\n\n${link}`;
   const poster = `https://bisque.today/poster/${user}/${id}/og-slide.png`;
   return `---\n\n[![A narrated explainer of ${subject}](${poster})](${url})\n\n${link}`;
 }
 
-const line = watchBlock(process.env.BISQUE_USER_ID ?? "", process.env.PRESENTATION_ID ?? "");
+const line = watchBlock(
+  process.env.BISQUE_USER_ID ?? "",
+  process.env.PRESENTATION_ID ?? "",
+);
 
 /** The notes with any previous marked line removed and this one appended. */
-export function appendLine(body: string | null | undefined, marker: string = MARKER, text: string = line): string {
+export function appendLine(
+  body: string | null | undefined,
+  marker: string = MARKER,
+  text: string = line,
+): string {
   // Everything a previous run added is dropped: the marker, whatever follows
   // it, and the bare line older versions wrote.
   const lines = (body ?? "").split("\n");
@@ -41,7 +53,15 @@ export function appendLine(body: string | null | undefined, marker: string = MAR
 
 if (process.env.SOURCE === "release") {
   const tag = process.env.TAG ?? "";
-  const current = ghJson<{ body: string | null }>(["release", "view", tag, "-R", repo, "--json", "body"]).body;
+  const current = ghJson<{ body: string | null }>([
+    "release",
+    "view",
+    tag,
+    "-R",
+    repo,
+    "--json",
+    "body",
+  ]).body;
   const file = join(process.env.RUNNER_TEMP || "/tmp", "notes.md");
   writeFileSync(file, appendLine(current));
   gh(["release", "edit", tag, "-R", repo, "--notes-file", file]);
@@ -49,10 +69,21 @@ if (process.env.SOURCE === "release") {
 } else if (process.env.SOURCE === "pull-request") {
   const number = process.env.PR_NUMBER ?? "";
   const body = `${MARKER}\n${line}`;
-  const comments = ghJson<Array<{ id: number; body?: string }>>(["api", `repos/${repo}/issues/${number}/comments`, "--paginate"]);
+  const comments = ghJson<Array<{ id: number; body?: string }>>([
+    "api",
+    `repos/${repo}/issues/${number}/comments`,
+    "--paginate",
+  ]);
   const existing = comments.find((c) => (c.body ?? "").startsWith(MARKER));
   if (existing) {
-    gh(["api", "-X", "PATCH", `repos/${repo}/issues/comments/${existing.id}`, "-f", `body=${body}`]);
+    gh([
+      "api",
+      "-X",
+      "PATCH",
+      `repos/${repo}/issues/comments/${existing.id}`,
+      "-f",
+      `body=${body}`,
+    ]);
     console.log(`Updated comment ${existing.id} on #${number}: ${watchUrl}`);
   } else {
     gh(["pr", "comment", number, "-R", repo, "--body", body]);

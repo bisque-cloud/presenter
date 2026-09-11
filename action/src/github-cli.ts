@@ -15,10 +15,19 @@ export function gh(args: string[]): string {
       stdio: ["ignore", "pipe", "pipe"],
     });
   } catch (err) {
-    const e = err as { stderr?: string | Buffer; status?: number; code?: string };
-    if (e.code === "ENOENT") fail("The `gh` CLI is missing from this runner. GitHub-hosted runners ship it; a self-hosted runner needs it installed.");
+    const e = err as {
+      stderr?: string | Buffer;
+      status?: number;
+      code?: string;
+    };
+    if (e.code === "ENOENT")
+      fail(
+        "The `gh` CLI is missing from this runner. GitHub-hosted runners ship it; a self-hosted runner needs it installed.",
+      );
     const said = String(e.stderr ?? "").trim();
-    fail(`gh ${args.slice(0, 3).join(" ")} failed${e.status ? ` (exit ${e.status})` : ""}${said ? `: ${said}` : ""}`);
+    fail(
+      `gh ${args.slice(0, 3).join(" ")} failed${e.status ? ` (exit ${e.status})` : ""}${said ? `: ${said}` : ""}`,
+    );
   }
 }
 
@@ -28,6 +37,8 @@ export function ghJson<T = unknown>(args: string[]): T {
   try {
     return JSON.parse(out) as T;
   } catch {
-    return fail(`gh ${args.slice(0, 3).join(" ")} returned output that is not JSON: ${out.slice(0, 200)}`);
+    return fail(
+      `gh ${args.slice(0, 3).join(" ")} returned output that is not JSON: ${out.slice(0, 200)}`,
+    );
   }
 }

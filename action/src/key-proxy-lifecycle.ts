@@ -9,7 +9,13 @@
 // that follows has no key in its own environment and none in any process
 // environment it can read.
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { fail, output, workDir } from "./action-step.ts";
 import { keysFromEnv, resolveRun, specFor } from "./model-provider.ts";
@@ -23,7 +29,11 @@ async function start(): Promise<void> {
   // The key that was supplied decides the provider, and the provider decides
   // the model unless one was named. Resolving here means the agent step is
   // handed a decision rather than making it again.
-  const run = resolveRun(keysFromEnv(process.env), process.env.MODEL ?? "", process.env.VARIANT ?? "");
+  const run = resolveRun(
+    keysFromEnv(process.env),
+    process.env.MODEL ?? "",
+    process.env.VARIANT ?? "",
+  );
   if ("error" in run) fail(run.error);
   const { provider, model, variant, key } = run;
   const upstream = specFor(provider);
@@ -31,13 +41,31 @@ async function start(): Promise<void> {
   // The proxy's own environment carries no key: it arrives over stdin.
   const env = { ...process.env };
   delete env.API_KEY;
-  for (const p of ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY", "XAI_API_KEY"]) delete env[p];
+  for (const p of [
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "GEMINI_API_KEY",
+    "GOOGLE_API_KEY",
+    "GOOGLE_GENERATIVE_AI_API_KEY",
+    "XAI_API_KEY",
+  ])
+    delete env[p];
 
-  const child = spawn("node", [new URL("./key-proxy-server.ts", import.meta.url).pathname, upstream.origin, upstream.header, "-", upstream.prefix], {
-    env,
-    detached: true,
-    stdio: ["pipe", "pipe", "pipe"],
-  });
+  const child = spawn(
+    "node",
+    [
+      new URL("./key-proxy-server.ts", import.meta.url).pathname,
+      upstream.origin,
+      upstream.header,
+      "-",
+      upstream.prefix,
+    ],
+    {
+      env,
+      detached: true,
+      stdio: ["pipe", "pipe", "pipe"],
+    },
+  );
   child.stdin.end(key);
   const port = await new Promise<string>((resolve) => {
     let out = "";
@@ -54,7 +82,10 @@ async function start(): Promise<void> {
     });
     setTimeout(() => resolve(""), 5000);
   });
-  if (!port) fail(`key proxy failed to start${existsSync(logfile) ? ": " + readFileSync(logfile, "utf8") : ""}`);
+  if (!port)
+    fail(
+      `key proxy failed to start${existsSync(logfile) ? ": " + readFileSync(logfile, "utf8") : ""}`,
+    );
   child.stdout.destroy();
   child.stderr.destroy();
   child.unref();
@@ -64,7 +95,9 @@ async function start(): Promise<void> {
   output("model", model);
   output("variant", variant);
   output("base-path", upstream.basePath);
-  console.log(`${model}${variant ? ` (${variant})` : ""} — key proxy on 127.0.0.1:${port} (pid ${child.pid})`);
+  console.log(
+    `${model}${variant ? ` (${variant})` : ""} — key proxy on 127.0.0.1:${port} (pid ${child.pid})`,
+  );
 }
 
 function stop(): void {
