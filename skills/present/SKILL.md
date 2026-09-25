@@ -272,6 +272,61 @@ Don't re-narrate: the audio is already published and the renderer downloads it.
 
 Rendering is macOS-only. On Linux or Windows, say so and offer the watch URL.
 
+## 7. An interactive presentation, while the work is still running
+
+A presentation can ask the person watching it a question and hand you the
+answer. Use this when what you are presenting still has decisions in it: a
+workflow that stops to ask (an office-hours session, a plan review, a
+one-question-at-a-time grilling), rather than a finished report. A finished
+report has nothing left to decide, so present it the ordinary way. You tell
+the two apart from the material, not from the request. The order of skill
+names on a line carries no meaning, and "run office hours on this idea, as a
+presentation" is enough.
+
+Publish what you have so far with `--keep-open`. The presentation stays open
+instead of being finished, and the output carries its `presentationId`. Keep
+it; every later command names it.
+
+```sh
+node present.mjs publish --html index.html --keep-open --title "Office hours: …"
+```
+
+To add slides, append new sections to the end of `index.html` and re-run the
+same command with the id. Never remove, reorder or rewrite an earlier section;
+the person may already be watching it, and the server refuses the append
+(`LIVE_APPEND_ONLY`).
+
+```sh
+node present.mjs publish --html index.html --keep-open --presentation-id <id>
+```
+
+To ask, put the question on a slide as a `bp-survey`. Fetch
+`node present.mjs spec --part surveys` first and follow it: the same spec in
+both layout blocks, and a `<<fire handoff target=… for=hold>>` cue on the last
+word of the narration that asks the question, so playback stops for the
+answer. Publish that slide, then wait:
+
+```sh
+node present.mjs wait --presentation <id> --survey <survey id>
+```
+
+`wait` blocks until the answer is complete, prints it as JSON
+(`answers`, keyed by question id), and exits 0. It waits indefinitely by
+default, like any wait on a deploy or a CI run; `--timeout <seconds>` makes it
+exit 2 when the time passes. Use the answer, then keep going: the next slide
+can say what they chose.
+
+When the work is done, end the session. That claims the version, and from then
+on it is an ordinary presentation.
+
+```sh
+node present.mjs finish --presentation <id>
+```
+
+If the server has no live presentation API yet, `publish --keep-open` says so and
+stops. Ask the questions in the conversation instead, and present the result
+the ordinary way when the work is done.
+
 ## Rules
 
 - Absolute path for `bisque-voice`. `command -v` reports "missing" on machines
@@ -280,3 +335,6 @@ Rendering is macOS-only. On Linux or Windows, say so and offer the watch URL.
   narration.
 - Don't inline the format spec, and don't hand-edit `presentation.json` — the
   server assembles it so every producer computes cues the same way.
+- Never `finish` a live presentation while a `wait` is still open or the
+  person is still answering. Finish once the work is done and the last slide
+  is published.

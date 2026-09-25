@@ -10,6 +10,9 @@
  *   node present.mjs login   [--profile NAME]
  *   node present.mjs plan    --html index.html
  *   node present.mjs publish --html index.html --voice kokoro:af_heart
+ *   node present.mjs publish --html index.html --keep-open [--presentation-id ID]
+ *   node present.mjs wait    --presentation ID --survey ID
+ *   node present.mjs finish  --presentation ID
  *
  * `publish` implements the update loop the whole feature exists for:
  *
@@ -2018,16 +2021,70 @@ async function cmdPublish(flags) {
   // A server that predates this API answers 404, and the run falls through to
   // the publish path below, which is what shipped clients have always done.
   // The skill runs against whatever is deployed.
+  //
+  // With --keep-open the creation stays open instead: the slides so far go up, their
+  // narration follows, and `create/finish` is left for `finish`. A re-run
+  // with --presentation-id appends to the open session (PATCH); when no
+  // session is open for that id, it starts one (POST). A
+  // live run has no fallback — the publish path below cannot hold a session
+  // open — so a server without this API is a plain failure.
+  const keepOpen = Boolean(flags["keep-open"]);
+  const noLiveApi = () =>
+    fail(
+      "--keep-open needs the live presentation API, and this server does not have " +
+        "it. Publish without --keep-open to make an ordinary presentation.",
+    );
+
+  async function openLive() {
+    const id = flags["presentation-id"];
+    if (typeof id === "string") {
+      try {
+        return await api(`/v1/presentations/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          body: meta,
+          auth,
+        });
+      } catch (error) {
+        if (!(error instanceof ApiError)) throw error;
+        if (error.code === "LIVE_APPEND_ONLY") {
+          fail(
+            "a live presentation only grows: keep every slide already published, " +
+              "in the same order, and add new sections after them.\n" +
+              `(${error.message})`,
+          );
+        }
+        if (error.code !== "NO_OPEN_CREATION") {
+          if (error.status === 404) noLiveApi();
+          throw error;
+        }
+        // No session open for this id: fall through and start one on it.
+      }
+    }
+    try {
+      return await api("/v1/presentations", {
+        body: meta,
+        auth,
+      });
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) noLiveApi();
+      throw error;
+    }
+  }
+
   async function createProgressively() {
     let creation;
-    try {
-      creation = await api("/v1/presentations", { body: meta, auth });
-    } catch (error) {
-      const missing =
-        error instanceof ApiError &&
-        (error.status === 404 || error.code === "NOT_FOUND");
-      if (missing) return null;
-      throw error;
+    if (keepOpen) {
+      creation = await openLive();
+    } else {
+      try {
+        creation = await api("/v1/presentations", { body: meta, auth });
+      } catch (error) {
+        const missing =
+          error instanceof ApiError &&
+          (error.status === 404 || error.code === "NOT_FOUND");
+        if (missing) return null;
+        throw error;
+      }
     }
 
     for (const target of creation.assetUploads ?? []) {
@@ -2080,6 +2137,7 @@ async function cmdPublish(flags) {
       fs.mkdirSync(audioDir, { recursive: true });
     }
 
+    let progress = null;
     for (const slideKey of needed) {
       const slide = plan.find((s) => s.slideKey === slideKey);
       if (!slide) continue;
@@ -2103,7 +2161,7 @@ async function cmdPublish(flags) {
       if (!res.ok)
         fail(`upload of ${slideKey} failed: ${res.status} ${await res.text()}`);
 
-      const progress = await api(
+      progress = await api(
         `/v1/presentations/${encodeURIComponent(
           creation.presentationId,
         )}/slides/${encodeURIComponent(slideKey)}`,
@@ -2121,6 +2179,34 @@ async function cmdPublish(flags) {
         },
       );
       say(`${slideKey}: narrated (${progress.complete}/${progress.total})`);
+    }
+
+    if (keepOpen) {
+      const id = creation.presentationId;
+      const revision = creation.live?.revision ?? null;
+      process.stdout.write(
+        JSON.stringify(
+          {
+            webUrl: creation.webUrl,
+            presentationId: id,
+            ...(progress
+              ? { narrated: progress.complete, total: progress.total }
+              : {}),
+            reused: creation.reused ?? [],
+            live: { revision },
+          },
+          null,
+          2,
+        ) + "\n",
+      );
+      say(
+        `live: the session is open${revision ? ` (revision ${revision})` : ""}. ` +
+          `To add slides, append sections to index.html and re-run publish with ` +
+          `--keep-open --presentation-id ${id}. To wait for an answer: ` +
+          `wait --presentation ${id} --survey <survey id>. To end it: ` +
+          `finish --presentation ${id}.`,
+      );
+      return true;
     }
 
     const done = await api(
@@ -2344,6 +2430,152 @@ async function cmdClaimUsername(rest, flags) {
   say(`claimed: ${JSON.stringify(res)}`);
 }
 
+// ─── live sessions: wait and finish ──────────────────────────────────────
+
+/** A flag holding a count of seconds, 0 or more. `--interval` with no value
+ *  parses as boolean true, which Number() would turn into 1 — refuse it. */
+function secondsFlag(raw, name, fallback) {
+  if (raw === undefined) return fallback;
+  const n = typeof raw === "string" ? Number(raw) : NaN;
+  if (!Number.isFinite(n) || n < 0) {
+    fail(
+      `--${name} needs a number of seconds, 0 or more (e.g. --${name} ${fallback})`,
+    );
+  }
+  return n;
+}
+
+function requireIdFlag(value, name, usage) {
+  if (typeof value !== "string" || value === "") {
+    fail(`--${name} <id> is required.\nusage: ${usage}`);
+  }
+  return value;
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** The server holds a poll open this long at most. */
+const MAX_HOLD_SECONDS = 25;
+/** Consecutive transient failures (network, 5xx, 429) before giving up. */
+const WAIT_RETRIES = 4;
+
+/**
+ * `wait` — block until the owner's answer to one survey is complete, then
+ * print it. Shaped like `gh run watch` and an AWS CLI waiter: the command
+ * returns when the thing happens, `--timeout 0` (the default) waits for as
+ * long as it takes, and a timeout that elapses exits 2 rather than 1, so a
+ * caller can tell "not answered yet" from "broken".
+ *
+ * Each poll asks the server to hold the request up to 25 seconds on a
+ * listener, so an answer arrives within a second of being given and a long
+ * wait costs one request every 25 seconds. `--interval` is the pause after a
+ * poll that came back early without an answer.
+ */
+async function cmdWait(flags) {
+  const usage =
+    "wait --presentation <id> --survey <id> [--interval 3] [--timeout 0]";
+  const presentationId = requireIdFlag(
+    flags.presentation,
+    "presentation",
+    usage,
+  );
+  const surveyId = requireIdFlag(flags.survey, "survey", usage);
+  const interval = secondsFlag(flags.interval, "interval", 3);
+  const timeout = secondsFlag(flags.timeout, "timeout", 0);
+  const auth = requireAuth(flags);
+  const deadline = timeout > 0 ? Date.now() + timeout * 1000 : Infinity;
+  const target =
+    `/v1/presentations/${encodeURIComponent(presentationId)}` +
+    `/surveys/${encodeURIComponent(surveyId)}/response`;
+
+  say(
+    `waiting for the answer to survey ${surveyId} on presentation ${presentationId}` +
+      (timeout > 0 ? ` (timeout ${timeout}s)` : "") +
+      "…",
+  );
+
+  const timedOut = () => {
+    process.stderr.write(
+      `present: no answer to survey ${surveyId} on presentation ` +
+        `${presentationId} after ${timeout}s.\n`,
+    );
+    process.exit(2);
+  };
+
+  let failures = 0;
+  for (;;) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) timedOut();
+    const hold = Math.max(
+      1,
+      Math.min(MAX_HOLD_SECONDS, Math.ceil(remaining / 1000)),
+    );
+    const started = Date.now();
+    let res;
+    try {
+      res = await api(`${target}?wait=${hold}`, { method: "GET", auth });
+      failures = 0;
+    } catch (error) {
+      const transient =
+        !(error instanceof ApiError) ||
+        error.status >= 500 ||
+        error.status === 429;
+      if (!transient || failures >= WAIT_RETRIES) throw error;
+      failures += 1;
+      const detail =
+        error instanceof ApiError
+          ? `${error.status} ${error.code}`
+          : (error?.message ?? String(error));
+      say(
+        `note: poll failed (${detail}); retry ${failures} of ${WAIT_RETRIES}.`,
+      );
+      await sleep(Math.min(deadline - Date.now(), 2 ** failures * 1000));
+      continue;
+    }
+    if (res?.complete) {
+      process.stdout.write(JSON.stringify(res, null, 2) + "\n");
+      return;
+    }
+    // A poll that was held its full length can be re-issued at once; one that
+    // came back early would otherwise turn into a tight loop.
+    const early = Date.now() - started < hold * 1000 - 500;
+    if (early && interval > 0) {
+      await sleep(Math.min(deadline - Date.now(), interval * 1000));
+    }
+  }
+}
+
+/**
+ * `finish` — end a live session. The creation is closed and its version
+ * claimed exactly as a non-live publish ends; after this the presentation is
+ * an ordinary one and `publish --keep-open` on the same id starts a new session.
+ */
+async function cmdFinish(flags) {
+  const presentationId = requireIdFlag(
+    flags.presentation,
+    "presentation",
+    "finish --presentation <id>",
+  );
+  const auth = requireAuth(flags);
+  const done = await api(
+    `/v1/presentations/${encodeURIComponent(presentationId)}:finalize`,
+    { body: {}, auth },
+  );
+  process.stdout.write(
+    JSON.stringify(
+      {
+        ...(done.webUrl ? { webUrl: done.webUrl } : {}),
+        presentationId: done.presentationId ?? presentationId,
+        narrated: done.complete,
+        total: done.total,
+        ...(done.silentSlides ? { silentSlides: done.silentSlides } : {}),
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+}
+
 // ─── plumbing ────────────────────────────────────────────────────────────
 
 function say(msg) {
@@ -2442,6 +2674,13 @@ async function cmdSpec(flags) {
   // addressing — the query form answers an unknown part with the full
   // default payload, so the fallback degrades to "more spec than asked
   // for", never to a miss.
+  //
+  // A server that does know path addressing names an unknown part in its 404
+  // ("Unknown spec part …"). That answer is final: the query form would hand
+  // back the whole default payload, and an agent that asked for one module
+  // would read 100 KB without it and never learn the module was missing.
+  // Gated modules (`surveys`) answer that way to an account not entitled to
+  // them, so that case matters most.
   const urls = [
     `${BASE}/api/presentations/spec/${encodeURIComponent(part)}.md`,
     `${BASE}/api/presentations/spec?part=${encodeURIComponent(part)}`,
@@ -2450,6 +2689,18 @@ async function cmdSpec(flags) {
   for (const url of urls) {
     response = await fetch(url, { headers });
     if (response.ok) break;
+    if (response.status === 404) {
+      const body = await response.text();
+      if (body.startsWith("Unknown spec part")) {
+        fail(
+          body.trim() +
+            (auth?.apiKey
+              ? " A gated module is also absent when this account is not entitled to it."
+              : " This fetch carried no credentials, and gated modules are served only to " +
+                "entitled accounts — pass --profile <name> or run `login`."),
+        );
+      }
+    }
   }
   if (!response.ok) {
     fail(`spec fetch failed: HTTP ${response.status}`);
@@ -2483,7 +2734,10 @@ const USAGE = `usage:
                            [--made-with "Model Name"]
                            [--engine E] [--align A|none] [--speed 1.0] [--match-macos]
                            [--device auto|cpu|gpu] [--audio-dir audio] [--all]
+                           [--keep-open] [--profile NAME]
+  node present.mjs wait    --presentation ID --survey ID [--interval 3] [--timeout 0]
                            [--profile NAME]
+  node present.mjs finish  --presentation ID [--profile NAME]
 
 --voice/--engine fall back to the account's settings on bisque.cloud (via
 /api/me) when omitted.
@@ -2491,6 +2745,13 @@ const USAGE = `usage:
 --made-with credits the models behind the presentation. Pass the model you are
 running as ("Claude Opus 5", "GPT-5.4 mini"); the narrating voice is added for
 you. Viewers see the list in the watch page's ⋯ menu.
+
+--keep-open keeps the presentation open after publishing, so later runs can add
+slides to it while it is being watched. Re-run publish --keep-open with
+--presentation-id ID to append (new sections only, after the existing ones).
+wait blocks until the owner's answer to a survey is complete and prints it
+(--timeout 0 waits indefinitely; an elapsed timeout exits 2). finish ends the
+session and claims the version.
 
 --org publishes into a company's library on bisque.team (members only by
 default); a repo can pin it with {"org": "<slug>"} in .bisque.json.
@@ -2519,6 +2780,10 @@ async function main() {
       return cmdPronunciationReport(flags);
     case "publish":
       return cmdPublish(flags);
+    case "wait":
+      return cmdWait(flags);
+    case "finish":
+      return cmdFinish(flags);
     default:
       process.stderr.write(USAGE + "\n");
       process.exit(command ? 1 : 0);
