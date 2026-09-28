@@ -221,6 +221,11 @@ id. The narrating voice is added for you. Viewers can see the list in the watch
 page's ⋯ menu; it is never the focus of the page. If you genuinely do not know
 what model you are, leave the flag off rather than guessing.
 
+Pass `--description description.txt` to set the text under the player: a line
+or two on what the presentation covers, then the links behind it, one per line.
+Web URLs in it become links, so sources belong there and in `context.md`, not
+on a slide. A republish without the flag keeps the description already there.
+
 Add `--engine`/`--align` when more than one is installed, `--speed` (default
 1.0, valid range 0.7–1.2), `--handle`, `--slug`, `--design`,
 `--presentation-id`, `--device`. It

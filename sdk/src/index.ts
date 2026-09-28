@@ -160,6 +160,8 @@ export interface CreatePresentationRunRequest {
   contextMd?: string;
   designMd?: string;
   madeWith?: string[];
+  /** Watch-page description; URLs are linked. Omit to keep the stored one. */
+  description?: string;
   assets?: Array<Record<string, unknown>>;
 }
 

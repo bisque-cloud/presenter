@@ -2008,6 +2008,12 @@ async function cmdPublish(flags) {
           ),
         }
       : {}),
+    // The watch-page description, sources included. Omitted, the server
+    // keeps whatever an earlier publish sent, so a republish that forgets
+    // the flag does not wipe it.
+    ...(flags.description !== undefined
+      ? { description: readDescription(workDir, flags.description) }
+      : {}),
   };
 
   // ── 1. Create it: the slides go up first, and each slide's narration
@@ -2422,6 +2428,21 @@ function readNamedFile(p, flag) {
   return fs.readFileSync(p, "utf8");
 }
 
+/** `--description <file>`: plain text, URLs linked on the watch page. The
+ *  server caps it at 5,000 characters; an empty file clears it. */
+function readDescription(workDir, value) {
+  if (typeof value !== "string" || !value) {
+    fail("--description needs a file: --description description.txt");
+  }
+  const text = readNamedFile(path.resolve(workDir, value), "--description");
+  if (text.trim().length > 5000) {
+    fail(
+      `--description ${value} is ${text.trim().length} characters; the limit is 5,000.`,
+    );
+  }
+  return text;
+}
+
 async function cmdClaimUsername(rest, flags) {
   const username = rest[0];
   if (!username) fail("usage: claim-username <handle>");
@@ -2731,6 +2752,7 @@ const USAGE = `usage:
                            [--presentation-id ID] [--handle H]
                            [--org SLUG] [--group ID]
                            [--context context.md] [--design design.md]
+                           [--description description.txt]
                            [--made-with "Model Name"]
                            [--engine E] [--align A|none] [--speed 1.0] [--match-macos]
                            [--device auto|cpu|gpu] [--audio-dir audio] [--all]
@@ -2745,6 +2767,10 @@ const USAGE = `usage:
 --made-with credits the models behind the presentation. Pass the model you are
 running as ("Claude Opus 5", "GPT-5.4 mini"); the narrating voice is added for
 you. Viewers see the list in the watch page's ⋯ menu.
+
+--description sets the text under the player on the watch page: a line or two
+on what it covers, then its sources. Plain text; web URLs become links. Omit it
+on a republish to keep the one already there; an empty file clears it.
 
 --keep-open keeps the presentation open after publishing, so later runs can add
 slides to it while it is being watched. Re-run publish --keep-open with
