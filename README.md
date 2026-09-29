@@ -53,6 +53,11 @@ time, and each one has a watch URL you can send to anyone:
 
 [![A channel page listing nine published presentations](https://storage.googleapis.com/download.bisque.today/presenter/readme/channel.png)](https://bisque.today/p/siderakis)
 
+The people you send it to can watch in any browser, or in the
+[Bisque app for iPhone and iPad](https://apps.apple.com/app/id6787150959),
+free on the App Store, where they can subscribe to your channel and keep
+listening with the app in the background.
+
 ## Agents can read them too
 
 Every presentation is built so an agent can read it efficiently: the full
