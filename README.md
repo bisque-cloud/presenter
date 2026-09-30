@@ -122,7 +122,24 @@ It lives in [`sdk/`](./sdk); the API it wraps is described at
 This repo is also a GitHub Action. Add one step to a workflow and every
 release you publish gets a narrated explainer, made by the model you already
 pay for, with the watch link appended to the release notes for the people
-deciding whether to upgrade:
+deciding whether to upgrade.
+
+<!-- release-explainer-walkthrough: to remove, delete from here to the end marker -->
+
+[![The first slide of a walkthrough of the Release Explainer action](https://bisque.today/poster/AlY6OT2Cd1YpfqlZ5jsfdWcae933/release-explainer-v1-93be8d/og-slide.png)](https://bisque.today/p/siderakis/release-explainer-v1)
+
+A four-minute walkthrough of this action: the workflow step and its three
+secrets, which model each provider key runs, what happens between a published
+release and the link in its notes, how your model key stays out of the
+agent's reach, `/explain` on pull requests, and what it costs.
+[Watch it →](https://bisque.today/p/siderakis/release-explainer-v1)
+
+<sub>Reviewed against v1.0.0, commit 2976f45, on 2026-09-30. Refreshed by
+hand; owner @siderakis.</sub>
+
+<!-- end release-explainer-walkthrough -->
+
+The step itself:
 
 ```yaml
 on:
