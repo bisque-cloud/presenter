@@ -11,6 +11,7 @@
  *   node present.mjs plan    --html index.html
  *   node present.mjs publish --html index.html --voice kokoro:af_heart
  *   node present.mjs publish --html index.html --keep-open [--presentation-id ID]
+ *   node present.mjs resume  --presentation ID [--dir DIR]
  *   node present.mjs wait    --presentation ID --survey ID
  *   node present.mjs finish  --presentation ID
  *
@@ -1896,6 +1897,18 @@ async function cmdPublish(flags) {
   // account in `.bisque.json` publishes to that account.
   const auth = requireAuth(flags, workDir);
   const audioDir = path.resolve(workDir, flags["audio-dir"] ?? "audio");
+  // The live presentation this directory last published or resumed, if it is
+  // the one being appended to: its revision goes with the append, and its
+  // narration speed is the default, so the slides already narrated keep
+  // their audio.
+  const liveState =
+    flags["keep-open"] && typeof flags["presentation-id"] === "string"
+      ? readLiveState(workDir, flags["presentation-id"])
+      : null;
+  if (liveState && flags.speed === undefined && liveState.speechSpeed) {
+    flags.speed = String(liveState.speechSpeed);
+    say(`speed: ${flags.speed} (what this live presentation was narrated at)`);
+  }
   // A bare `--speed` (no value) parses as boolean true, and Number(true) === 1
   // would slip past the range check below and silently narrate at 1.0 — catch it.
   if (flags.speed === true) {
@@ -2044,10 +2057,18 @@ async function cmdPublish(flags) {
   async function openLive() {
     const id = flags["presentation-id"];
     if (typeof id === "string") {
+      // The server pinned where this presentation publishes when it was
+      // opened, and fills in whatever an append leaves out. So an append
+      // sends a visibility only when one was asked for: the default here is
+      // "unlisted", and sending it would refuse an append to a private one.
+      const { visibility: _pinned, ...appendMeta } = meta;
       try {
         return await api(`/v1/presentations/${encodeURIComponent(id)}`, {
           method: "PATCH",
-          body: meta,
+          body: {
+            ...(flags.visibility ? meta : appendMeta),
+            ...(liveState ? { baseRevision: liveState.revision } : {}),
+          },
           auth,
         });
       } catch (error) {
@@ -2057,6 +2078,28 @@ async function cmdPublish(flags) {
             "a live presentation only grows: keep every slide already published, " +
               "in the same order, and add new sections after them.\n" +
               `(${error.message})`,
+          );
+        }
+        if (
+          error.code === "LIVE_REVISION_CONFLICT" ||
+          error.code === "LIVE_APPEND_IN_PROGRESS"
+        ) {
+          fail(
+            `${error.message}\nNothing was published. Get the slides as they ` +
+              `stand with\n  node present.mjs resume --presentation ${id} ` +
+              `--dir <an empty directory>\nthen add your new sections after ` +
+              `them there and publish again from that directory.`,
+          );
+        }
+        if (error.code === "NO_OPEN_CREATION" && liveState) {
+          // This directory was working on a live session under this id, and
+          // it has ended. Starting a new one here would replace the finished
+          // presentation, so stop and say so.
+          fail(
+            `presentation ${id} is no longer live: it was finished, so it ` +
+              `takes no more slides. Publish a new live presentation with ` +
+              `--keep-open and no --presentation-id, or delete ` +
+              `${LIVE_STATE_FILE} here to replace it on purpose.`,
           );
         }
         if (error.code !== "NO_OPEN_CREATION") {
@@ -2190,6 +2233,15 @@ async function cmdPublish(flags) {
     if (keepOpen) {
       const id = creation.presentationId;
       const revision = creation.live?.revision ?? null;
+      if (revision) {
+        writeLiveState(workDir, {
+          presentationId: id,
+          revision,
+          speechSpeed: speed,
+          ...(voiceId ? { voiceId } : {}),
+          webUrl: creation.webUrl,
+        });
+      }
       process.stdout.write(
         JSON.stringify(
           {
@@ -2210,7 +2262,8 @@ async function cmdPublish(flags) {
           `To add slides, append sections to index.html and re-run publish with ` +
           `--keep-open --presentation-id ${id}. To wait for an answer: ` +
           `wait --presentation ${id} --survey <survey id>. To end it: ` +
-          `finish --presentation ${id}.`,
+          `finish --presentation ${id}. If this session ends first, a new ` +
+          `one continues it with resume --presentation ${id}.`,
       );
       return true;
     }
@@ -2518,7 +2571,9 @@ async function cmdWait(flags) {
   const timedOut = () => {
     process.stderr.write(
       `present: no answer to survey ${surveyId} on presentation ` +
-        `${presentationId} after ${timeout}s.\n`,
+        `${presentationId} after ${timeout}s. The presentation is still ` +
+        `open: run the same wait again, or, from a later session, ` +
+        `\`resume --presentation ${presentationId}\`.\n`,
     );
     process.exit(2);
   };
@@ -2566,10 +2621,166 @@ async function cmdWait(flags) {
   }
 }
 
+/** Where a directory records the live presentation it is appending to. */
+const LIVE_STATE_FILE = ".present-live.json";
+
+/**
+ * The live presentation `dir` last published or resumed, when it is `id`.
+ * Anything unreadable, or another presentation's, is no state at all.
+ */
+export function readLiveState(dir, id) {
+  try {
+    const state = JSON.parse(
+      fs.readFileSync(path.join(dir, LIVE_STATE_FILE), "utf8"),
+    );
+    if (
+      state?.presentationId !== id ||
+      !Number.isInteger(state.revision) ||
+      state.revision < 1
+    ) {
+      return null;
+    }
+    return state;
+  } catch {
+    return null;
+  }
+}
+
+function writeLiveState(dir, state) {
+  fs.writeFileSync(
+    path.join(dir, LIVE_STATE_FILE),
+    JSON.stringify(state, null, 2) + "\n",
+  );
+}
+
+/**
+ * The files `resume` writes, and any of them that would replace different
+ * bytes already in `dir`. A directory already holding this presentation
+ * resumes in place; one holding other work is left alone.
+ */
+export function resumeWrites(dir, state) {
+  const writes = [{ name: "index.html", text: state.indexHtml }];
+  if (typeof state.contextMd === "string") {
+    writes.push({ name: "context.md", text: state.contextMd });
+  }
+  const clashes = writes
+    .filter(({ name, text }) => {
+      const file = path.join(dir, name);
+      return fs.existsSync(file) && fs.readFileSync(file, "utf8") !== text;
+    })
+    .map(({ name }) => name);
+  return { writes, clashes };
+}
+
+/**
+ * `resume` — pick up a live presentation from a new session, after the one
+ * that was adding to it ended before `finish`.
+ *
+ * It asks the server for the open creation as it stands and writes it into
+ * `--dir` (default: here): `index.html` with every slide published so far,
+ * `context.md` if there is one, and `.present-live.json` holding the revision
+ * the next append is written against. Then it prints the owner's answer to
+ * every survey so far, so a question already answered is not asked again.
+ * Continue with `publish --keep-open --presentation-id ID` from that
+ * directory, new sections after the existing ones.
+ *
+ * Nothing on the server changes, so two sessions may both resume. The first
+ * to append wins; the other's append is refused because its revision is
+ * behind, and it resumes again. The server refuses a presentation that was
+ * finished, replaced by another publish, or belongs to another account.
+ */
+async function cmdResume(flags) {
+  const usage = "resume --presentation <id> [--dir DIR]";
+  const presentationId = requireIdFlag(
+    flags.presentation,
+    "presentation",
+    usage,
+  );
+  const dir = path.resolve(typeof flags.dir === "string" ? flags.dir : ".");
+  fs.mkdirSync(dir, { recursive: true });
+  const auth = requireAuth(flags, dir);
+
+  let state;
+  try {
+    state = await api(
+      `/v1/presentations/${encodeURIComponent(presentationId)}`,
+      {
+        method: "GET",
+        auth,
+      },
+    );
+  } catch (error) {
+    if (error instanceof ApiError && error.code === "NO_OPEN_CREATION") {
+      fail(
+        `presentation ${presentationId} is not live: it was finished, or was ` +
+          `never published with --keep-open. There is nothing to resume.`,
+      );
+    }
+    if (error instanceof ApiError && error.code === "PRESENTATION_NOT_FOUND") {
+      fail(
+        `presentation ${presentationId} is not one this account can change.`,
+      );
+    }
+    throw error;
+  }
+
+  const { writes, clashes } = resumeWrites(dir, state);
+  if (clashes.length > 0) {
+    fail(
+      `${clashes.join(" and ")} in ${dir} differ from what presentation ` +
+        `${presentationId} has published. Resume into an empty directory ` +
+        `with --dir, then carry any new sections over.`,
+    );
+  }
+  for (const { name, text } of writes) {
+    fs.writeFileSync(path.join(dir, name), text);
+  }
+  writeLiveState(dir, {
+    presentationId,
+    revision: state.live.revision,
+    speechSpeed: state.voice?.speechSpeed,
+    ...(state.voice?.voiceId ? { voiceId: state.voice.voiceId } : {}),
+    webUrl: state.webUrl,
+  });
+
+  const answered = state.surveys.filter((survey) => survey.complete);
+  process.stdout.write(
+    JSON.stringify(
+      {
+        presentationId,
+        webUrl: state.webUrl,
+        title: state.title,
+        dir,
+        live: state.live,
+        slides: state.slides.length,
+        narrationPending: state.slides
+          .filter((slide) => slide.audio !== "ready")
+          .map((slide) => slide.slideKey),
+        voice: state.voice,
+        assets: state.assets,
+        surveys: state.surveys,
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+  say(
+    `resumed: ${state.slides.length} slide(s) at revision ` +
+      `${state.live.revision}, ${answered.length} of ` +
+      `${state.surveys.length} question(s) answered. Add sections after the ` +
+      `last one in ${path.join(dir, "index.html")}, then run publish ` +
+      `--keep-open --presentation-id ${presentationId}` +
+      (state.voice?.voiceId ? ` --voice ${state.voice.voiceId}` : "") +
+      ` from ${dir}.`,
+  );
+}
+
 /**
  * `finish` — end a live session. The creation is closed and its version
  * claimed exactly as a non-live publish ends; after this the presentation is
- * an ordinary one and `publish --keep-open` on the same id starts a new session.
+ * an ordinary one. `publish --keep-open` on the same id then refuses from a
+ * directory that recorded the session (`.present-live.json`), and starts a
+ * new session on that id from anywhere else.
  */
 async function cmdFinish(flags) {
   const presentationId = requireIdFlag(
@@ -2757,6 +2968,7 @@ const USAGE = `usage:
                            [--engine E] [--align A|none] [--speed 1.0] [--match-macos]
                            [--device auto|cpu|gpu] [--audio-dir audio] [--all]
                            [--keep-open] [--profile NAME]
+  node present.mjs resume  --presentation ID [--dir DIR] [--profile NAME]
   node present.mjs wait    --presentation ID --survey ID [--interval 3] [--timeout 0]
                            [--profile NAME]
   node present.mjs finish  --presentation ID [--profile NAME]
@@ -2777,7 +2989,9 @@ slides to it while it is being watched. Re-run publish --keep-open with
 --presentation-id ID to append (new sections only, after the existing ones).
 wait blocks until the owner's answer to a survey is complete and prints it
 (--timeout 0 waits indefinitely; an elapsed timeout exits 2). finish ends the
-session and claims the version.
+session and claims the version. resume picks up a live presentation from a new
+session: it writes the slides published so far into --dir and prints the
+answers so far; publish --keep-open from that directory continues it.
 
 --org publishes into a company's library on bisque.team (members only by
 default); a repo can pin it with {"org": "<slug>"} in .bisque.json.
@@ -2806,6 +3020,8 @@ async function main() {
       return cmdPronunciationReport(flags);
     case "publish":
       return cmdPublish(flags);
+    case "resume":
+      return cmdResume(flags);
     case "wait":
       return cmdWait(flags);
     case "finish":

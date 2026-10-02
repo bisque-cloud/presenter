@@ -312,14 +312,26 @@ word of the narration that asks the question, so playback stops for the
 answer. Publish that slide, then wait:
 
 ```sh
-node present.mjs wait --presentation <id> --survey <survey id>
+node present.mjs wait --presentation <id> --survey <survey id> --timeout 1500
 ```
 
 `wait` blocks until the answer is complete, prints it as JSON
-(`answers`, keyed by question id), and exits 0. It waits indefinitely by
-default, like any wait on a deploy or a CI run; `--timeout <seconds>` makes it
-exit 2 when the time passes. Use the answer, then keep going: the next slide
-can say what they chose.
+(`answers`, keyed by question id), and exits 0. Use the answer, then keep
+going: the next slide can say what they chose. Ask one question at a time:
+publish the next question only after the last one is answered. A person who
+skips past an unanswered question leaves you waiting on it while they answer
+the next.
+
+People answer when they get to it, which can be hours later. Your harness
+probably stops long commands before then (Claude Code stops a background
+command after two hours at most), so give `wait` a `--timeout` shorter than
+that limit. Exit 2 means the time passed with no answer yet, not that the
+session is over: run the same `wait` again. A timeout is never a reason to
+finish.
+
+If your session has to end while a question is still open, leave the
+presentation open. Tell the person its id and that any later session can
+pick it up with `resume` (below); their answer will be waiting for it.
 
 When the work is done, end the session. That claims the version, and from then
 on it is an ordinary presentation.
@@ -327,6 +339,23 @@ on it is an ordinary presentation.
 ```sh
 node present.mjs finish --presentation <id>
 ```
+
+If you are asked to continue a live presentation that another session started
+and never finished, resume it by its id. Don't start a new one, and don't
+rebuild its slides from memory:
+
+```sh
+node present.mjs resume --presentation <id> --dir <empty directory>
+```
+
+`resume` writes the slides published so far into that directory as
+`index.html`, prints every answer the person has already given, and records
+where the presentation stands. Don't ask a question again that already has an
+answer. Add new sections after the last one and continue with
+`publish --keep-open --presentation-id <id>` from that directory. If another
+session appended first, the publish stops and changes nothing; resume again
+into a new directory and add your sections after theirs. A finished
+presentation can't be resumed.
 
 If the server has no live presentation API yet, `publish --keep-open` says so and
 stops. Ask the questions in the conversation instead, and present the result
