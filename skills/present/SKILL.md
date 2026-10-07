@@ -315,7 +315,8 @@ answer. Publish that slide, then wait:
 node present.mjs wait --presentation <id> --survey <survey id> --timeout 1500
 ```
 
-`wait` blocks until the answer is complete, prints it as JSON
+`wait` blocks until the person presses Continue under the questions (or
+play on that slide), prints the answer as JSON
 (`answers`, keyed by question id), and exits 0. Use the answer, then keep
 going: the next slide can say what they chose. Ask one question at a time:
 publish the next question only after the last one is answered. A person who

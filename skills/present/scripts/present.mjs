@@ -2532,22 +2532,32 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const MAX_HOLD_SECONDS = 25;
 /** Consecutive transient failures (network, 5xx, 429) before giving up. */
 const WAIT_RETRIES = 4;
+/** How often `wait` re-reads a complete answer while it is still settling
+ *  (only against a server that predates Continue). */
+const SETTLE_POLL_MS = 2000;
 
 /**
- * `wait` — block until the owner's answer to one survey is complete, then
- * print it. Shaped like `gh run watch` and an AWS CLI waiter: the command
- * returns when the thing happens, `--timeout 0` (the default) waits for as
- * long as it takes, and a timeout that elapses exits 2 rather than 1, so a
- * caller can tell "not answered yet" from "broken".
+ * `wait` — block until the owner presses Continue on one survey (or play on
+ * its slide), then print the answer. Shaped like `gh run watch` and an AWS
+ * CLI waiter: the command returns when the thing happens, `--timeout 0` (the
+ * default) waits for as long as it takes, and a timeout that elapses exits 2
+ * rather than 1, so a caller can tell "not answered yet" from "broken".
  *
  * Each poll asks the server to hold the request up to 25 seconds on a
  * listener, so an answer arrives within a second of being given and a long
  * wait costs one request every 25 seconds. `--interval` is the pause after a
  * poll that came back early without an answer.
+ *
+ * Answers save as the viewer types, so "every required question answered" is
+ * true at the first keystroke of a text answer. The server's `until=submit`
+ * waits for the explicit Continue instead. A server from before Continue
+ * ignores that parameter and omits `submitted`; against one, `wait` falls
+ * back to returning once a complete answer has stopped changing for
+ * `--settle` seconds.
  */
 async function cmdWait(flags) {
   const usage =
-    "wait --presentation <id> --survey <id> [--interval 3] [--timeout 0]";
+    "wait --presentation <id> --survey <id> [--interval 3] [--timeout 0] [--settle 15]";
   const presentationId = requireIdFlag(
     flags.presentation,
     "presentation",
@@ -2556,6 +2566,7 @@ async function cmdWait(flags) {
   const surveyId = requireIdFlag(flags.survey, "survey", usage);
   const interval = secondsFlag(flags.interval, "interval", 3);
   const timeout = secondsFlag(flags.timeout, "timeout", 0);
+  const settle = secondsFlag(flags.settle, "settle", 15);
   const auth = requireAuth(flags);
   const deadline = timeout > 0 ? Date.now() + timeout * 1000 : Infinity;
   const target =
@@ -2579,6 +2590,8 @@ async function cmdWait(flags) {
   };
 
   let failures = 0;
+  let settledKey;
+  let settledSince = 0;
   for (;;) {
     const remaining = deadline - Date.now();
     if (remaining <= 0) timedOut();
@@ -2589,7 +2602,10 @@ async function cmdWait(flags) {
     const started = Date.now();
     let res;
     try {
-      res = await api(`${target}?wait=${hold}`, { method: "GET", auth });
+      res = await api(`${target}?wait=${hold}&until=submit`, {
+        method: "GET",
+        auth,
+      });
       failures = 0;
     } catch (error) {
       const transient =
@@ -2608,10 +2624,29 @@ async function cmdWait(flags) {
       await sleep(Math.min(deadline - Date.now(), 2 ** failures * 1000));
       continue;
     }
-    if (res?.complete) {
+    if (res?.complete && res.submitted === true) {
       process.stdout.write(JSON.stringify(res, null, 2) + "\n");
       return;
     }
+    if (res?.complete && res.submitted === undefined) {
+      // A server from before Continue: return once the answer stops changing.
+      if (settle > 0) {
+        const key = (r) => JSON.stringify(r?.answers ?? null);
+        if (key(res) !== settledKey) {
+          settledKey = key(res);
+          settledSince = Date.now();
+        }
+        if (Date.now() - settledSince < settle * 1000) {
+          await sleep(
+            Math.max(0, Math.min(deadline - Date.now(), SETTLE_POLL_MS)),
+          );
+          continue;
+        }
+      }
+      process.stdout.write(JSON.stringify(res, null, 2) + "\n");
+      return;
+    }
+    settledKey = undefined;
     // A poll that was held its full length can be re-issued at once; one that
     // came back early would otherwise turn into a tight loop.
     const early = Date.now() - started < hold * 1000 - 500;
@@ -2970,6 +3005,7 @@ const USAGE = `usage:
                            [--keep-open] [--profile NAME]
   node present.mjs resume  --presentation ID [--dir DIR] [--profile NAME]
   node present.mjs wait    --presentation ID --survey ID [--interval 3] [--timeout 0]
+                           [--settle 15]
                            [--profile NAME]
   node present.mjs finish  --presentation ID [--profile NAME]
 
@@ -2987,9 +3023,11 @@ on a republish to keep the one already there; an empty file clears it.
 --keep-open keeps the presentation open after publishing, so later runs can add
 slides to it while it is being watched. Re-run publish --keep-open with
 --presentation-id ID to append (new sections only, after the existing ones).
-wait blocks until the owner's answer to a survey is complete and prints it
-(--timeout 0 waits indefinitely; an elapsed timeout exits 2). finish ends the
-session and claims the version. resume picks up a live presentation from a new
+wait blocks until the owner presses Continue on a survey (or play on its
+slide), then prints the answer; against an older server it returns once a
+complete answer has stopped changing for --settle seconds (--timeout 0 waits
+indefinitely; an elapsed timeout exits 2). finish ends the session and claims
+the version. resume picks up a live presentation from a new
 session: it writes the slides published so far into --dir and prints the
 answers so far; publish --keep-open from that directory continues it.
 
