@@ -297,6 +297,38 @@ and every action and the plugin pinned to a commit.
 All five workflows are in [`examples/`](./examples), and every input is described
 in [`action.yml`](./action.yml).
 
+### Or let the agent that reviews the code present it
+
+If a Claude Code agent already reviews your pull requests, install the plugin
+beside the review plugin and it can publish the walkthrough itself, in the same
+run. It has read the diff to review it, so it decides what is worth explaining
+and writes the presentation from that — nothing re-reads the pull request and
+no second model runs.
+
+```yaml
+- uses: anthropics/claude-code-action@v1
+  env:
+    BISQUE_API_KEY: ${{ secrets.BISQUE_API_KEY }}
+    BISQUE_USER_ID: ${{ secrets.BISQUE_USER_ID }}
+  with:
+    anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+    plugin_marketplaces: |
+      https://github.com/anthropics/claude-code.git
+      https://github.com/bisque-cloud/presenter.git
+    plugins: |
+      code-review@claude-code-plugins
+      presenter@bisque-cloud
+```
+
+The prompt then asks for the review first and the presentation second, so a
+narration that fails costs the presentation and not the review. Three things
+the shape depends on: `Bash` has to be in `--allowedTools`, because the action
+disallows a shell by default and the skill needs one; narration runs on the
+runner, so caching `~/.bisque/models` saves re-downloading the speech model;
+and the prompt should tell the agent to skip a pull request that already has a
+watch link, or every push republishes the same walkthrough. The whole workflow
+is [`examples/code-review-presentation.yml`](./examples/code-review-presentation.yml).
+
 ## Install
 
 Both plugins live in one marketplace. In Claude Code, from a terminal:
