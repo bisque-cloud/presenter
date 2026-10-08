@@ -11,7 +11,7 @@
  *   node present.mjs plan    --html index.html
  *   node present.mjs publish --html index.html --voice kokoro:af_heart
  *   node present.mjs publish --html index.html --keep-open [--presentation-id ID]
- *   node present.mjs resume  --presentation ID [--dir DIR]
+ *   node present.mjs resume  --presentation ID|WATCH_URL [--dir DIR]
  *   node present.mjs wait    --presentation ID --survey ID
  *   node present.mjs finish  --presentation ID
  *
@@ -2120,6 +2120,24 @@ async function cmdPublish(flags) {
     }
   }
 
+  function recordLive(creation) {
+    const id = creation.presentationId;
+    const revision = creation.live?.revision ?? null;
+    if (revision) {
+      writeLiveState(workDir, {
+        presentationId: id,
+        revision,
+        speechSpeed: speed,
+        ...(voiceId ? { voiceId } : {}),
+        webUrl: creation.webUrl,
+      });
+    }
+    say(
+      `live: presentation ${id} is open. If this run stops before it ` +
+        `finishes, continue it with resume --presentation ${id}.`,
+    );
+  }
+
   async function createProgressively() {
     let creation;
     if (keepOpen) {
@@ -2151,6 +2169,13 @@ async function cmdPublish(flags) {
           `upload of ${target.path} failed: ${res.status} ${await res.text()}`,
         );
     }
+
+    // Record the live session before narrating. Narration is the long part
+    // of a run and the likeliest place for it to die, and a run that dies
+    // there must still leave the id behind: written here, this directory can
+    // append with its revision, and the id is on the terminal for `resume`.
+    // Narration does not move the revision, so the state stays current.
+    if (keepOpen) recordLive(creation);
 
     const needed = creation.needsAudio ?? [];
     if (creation.replacedUnfinishedCreation) {
@@ -2233,15 +2258,6 @@ async function cmdPublish(flags) {
     if (keepOpen) {
       const id = creation.presentationId;
       const revision = creation.live?.revision ?? null;
-      if (revision) {
-        writeLiveState(workDir, {
-          presentationId: id,
-          revision,
-          speechSpeed: speed,
-          ...(voiceId ? { voiceId } : {}),
-          webUrl: creation.webUrl,
-        });
-      }
       process.stdout.write(
         JSON.stringify(
           {
@@ -2708,6 +2724,37 @@ export function resumeWrites(dir, state) {
 }
 
 /**
+ * The id of a presentation published without `--presentation-id`, from its
+ * watch URL (`https://bisque.today/p/<handle>/<slug>`, scheme optional), or
+ * null when `target` is not one.
+ *
+ * The server names such a presentation `<slug>-<6 hex>`, the hex from a
+ * SHA-256 of `<account uid>:<slug>`, so a retried publish lands on the same
+ * one. The watch URL is the first thing a publish prints, as soon as the
+ * slides are up, so a run that died while narrating still left enough to
+ * find its presentation again.
+ */
+export function presentationIdFromWatchUrl(target, userId) {
+  if (typeof target !== "string" || !target.includes("/")) return null;
+  let url;
+  try {
+    url = new URL(/^https?:\/\//i.test(target) ? target : `https://${target}`);
+  } catch {
+    return null;
+  }
+  const [p, handle, slugSegment] = url.pathname.split("/").filter(Boolean);
+  if (p !== "p" || !handle || !slugSegment) return null;
+  let slug;
+  try {
+    slug = decodeURIComponent(slugSegment);
+  } catch {
+    return null;
+  }
+  const hash = createHash("sha256").update(`${userId}:${slug}`).digest("hex");
+  return `${slug}-${hash.slice(0, 6)}`;
+}
+
+/**
  * `resume` — pick up a live presentation from a new session, after the one
  * that was adding to it ended before `finish`.
  *
@@ -2719,21 +2766,23 @@ export function resumeWrites(dir, state) {
  * Continue with `publish --keep-open --presentation-id ID` from that
  * directory, new sections after the existing ones.
  *
+ * `--presentation` is the id, or the watch URL when that is all the first
+ * session left (see `presentationIdFromWatchUrl`).
+ *
  * Nothing on the server changes, so two sessions may both resume. The first
  * to append wins; the other's append is refused because its revision is
  * behind, and it resumes again. The server refuses a presentation that was
  * finished, replaced by another publish, or belongs to another account.
  */
 async function cmdResume(flags) {
-  const usage = "resume --presentation <id> [--dir DIR]";
-  const presentationId = requireIdFlag(
-    flags.presentation,
-    "presentation",
-    usage,
-  );
+  const usage = "resume --presentation <id or watch URL> [--dir DIR]";
+  const target = requireIdFlag(flags.presentation, "presentation", usage);
   const dir = path.resolve(typeof flags.dir === "string" ? flags.dir : ".");
   fs.mkdirSync(dir, { recursive: true });
   const auth = requireAuth(flags, dir);
+  const fromUrl = presentationIdFromWatchUrl(target, auth.userId);
+  const presentationId = fromUrl ?? target;
+  if (fromUrl) say(`presentation: ${presentationId} (from ${target})`);
 
   let state;
   try {
@@ -2753,7 +2802,11 @@ async function cmdResume(flags) {
     }
     if (error instanceof ApiError && error.code === "PRESENTATION_NOT_FOUND") {
       fail(
-        `presentation ${presentationId} is not one this account can change.`,
+        fromUrl
+          ? `this account has no presentation at ${target}. If it was ` +
+              `published with --presentation-id, resume it by that id; if ` +
+              `another account published it, resume with that account's --profile.`
+          : `presentation ${presentationId} is not one this account can change.`,
       );
     }
     throw error;
@@ -3003,7 +3056,7 @@ const USAGE = `usage:
                            [--engine E] [--align A|none] [--speed 1.0] [--match-macos]
                            [--device auto|cpu|gpu] [--audio-dir audio] [--all]
                            [--keep-open] [--profile NAME]
-  node present.mjs resume  --presentation ID [--dir DIR] [--profile NAME]
+  node present.mjs resume  --presentation ID|WATCH_URL [--dir DIR] [--profile NAME]
   node present.mjs wait    --presentation ID --survey ID [--interval 3] [--timeout 0]
                            [--settle 15]
                            [--profile NAME]
@@ -3029,7 +3082,9 @@ complete answer has stopped changing for --settle seconds (--timeout 0 waits
 indefinitely; an elapsed timeout exits 2). finish ends the session and claims
 the version. resume picks up a live presentation from a new
 session: it writes the slides published so far into --dir and prints the
-answers so far; publish --keep-open from that directory continues it.
+answers so far; publish --keep-open from that directory continues it. It takes
+the presentation's id, or its watch URL when the first publish stopped before
+printing the id.
 
 --org publishes into a company's library on bisque.team (members only by
 default); a repo can pin it with {"org": "<slug>"} in .bisque.json.

@@ -289,8 +289,9 @@ names on a line carries no meaning, and "run office hours on this idea, as a
 presentation" is enough.
 
 Publish what you have so far with `--keep-open`. The presentation stays open
-instead of being finished, and the output carries its `presentationId`. Keep
-it; every later command names it.
+instead of being finished. Its `presentationId` is printed as soon as the
+slides are up, before narration starts, and again in the output at the end.
+Keep it; every later command names it.
 
 ```sh
 node present.mjs publish --html index.html --keep-open --title "Office hours: …"
@@ -314,6 +315,12 @@ answer. Publish that slide, then wait:
 ```sh
 node present.mjs wait --presentation <id> --survey <survey id> --timeout 1500
 ```
+
+Not every account can put a question on a slide yet. When that fetch answers
+`Unknown spec part`, this account can't: ask the question in the conversation
+instead, and say what the person chose on the next slide. Resuming changes
+nothing here. `resume` prints the answers already given either way; the spec
+is only for writing a new question.
 
 `wait` blocks until the person presses Continue under the questions (or
 play on that slide), prints the answer as JSON
@@ -347,6 +354,14 @@ rebuild its slides from memory:
 
 ```sh
 node present.mjs resume --presentation <id> --dir <empty directory>
+```
+
+If all you have is the watch URL, because the first publish stopped before it
+printed the id, pass the URL in place of the id. That works for a presentation
+published without `--presentation-id`, from the account that published it.
+
+```sh
+node present.mjs resume --presentation https://bisque.today/p/<handle>/<slug> --dir <empty directory>
 ```
 
 `resume` writes the slides published so far into that directory as
