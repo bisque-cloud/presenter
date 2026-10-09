@@ -9,7 +9,7 @@
  *   node present.mjs doctor
  *   node present.mjs login   [--profile NAME]
  *   node present.mjs plan    --html index.html
- *   node present.mjs publish --html index.html --voice kokoro:af_heart
+ *   node present.mjs publish --html index.html [--voice kokoro:af_heart]
  *   node present.mjs publish --html index.html --keep-open [--presentation-id ID]
  *   node present.mjs resume  --presentation ID|WATCH_URL [--dir DIR]
  *   node present.mjs wait    --presentation ID --survey ID
@@ -668,37 +668,52 @@ export function isStudioEngine(engineId) {
   return isCloneEngine(engineId) || isNamedStudioEngine(engineId);
 }
 
+/** What a publish must do about `engineId` before synthesizing, given
+ *  `bisque-voice engines --json`: `none` (nothing named, or already installed —
+ *  a CI cache restore lands here), `install`, or leave it for synthesis to
+ *  report — `unknown` to this bisque-voice, or `unsupported` on this build
+ *  (kokoro on an Intel Mac), where an install would refuse anyway. */
+export function engineInstallPlan(engines, engineId) {
+  if (!engineId) return { action: "none" };
+  const spec = (Array.isArray(engines) ? engines : []).find(
+    (s) => s.id === engineId,
+  );
+  if (!spec) return { action: "unknown" };
+  if (spec.installed) return { action: "none", spec };
+  if (spec.unsupported) return { action: "unsupported", spec };
+  return { action: "install", spec };
+}
+
 /**
- * The account's engine pick may name a Studio engine (qwen3-clone-* to clone
- * the account's own voice, qwen3-voices-* for one of the nine named speakers)
- * that this machine has never installed — the welcome flow saves the pick, the
- * terminal does the download. Say plainly what will be downloaded and how
- * large, then install it via bisque-voice, so synthesis below just works.
- * Non-Studio engines keep today's behavior (their absence still fails with
- * bisque-voice's own error), and an engine bisque-voice does not know is left
- * for synthesis to report.
+ * The engine this publish resolved — from `--voice`, or the channel's or
+ * account's saved voice — may not be on this machine yet: the welcome flow
+ * saves the pick and the terminal does the download, and a CI runner starts
+ * with nothing. Say plainly what will be downloaded and how large, then
+ * install it via bisque-voice, so synthesis below just works. An engine
+ * bisque-voice does not know, or cannot run here, is left for synthesis to
+ * report.
  */
-function ensureStudioEngineInstalled(bin, flags) {
+function ensureEngineInstalled(bin, flags) {
   const engineId = engineFor(flags);
-  if (!isStudioEngine(engineId)) return;
+  if (!engineId) return;
   let engines;
   try {
     engines = ttsJson(bin, ["engines", "--json"]);
   } catch {
     return; // engines list unavailable — let synthesis surface the real error
   }
-  const spec = engines.find((s) => s.id === engineId);
-  if (!spec) {
+  const { action, spec } = engineInstallPlan(engines, engineId);
+  if (action === "unknown") {
     say(
       `note: this bisque-voice does not list engine ${engineId} — it may be ` +
         `out of date. If synthesis fails, update bisque-voice first.`,
     );
     return;
   }
-  if (spec.installed) return;
+  if (action !== "install") return;
   say(
-    `The voice engine set on this account (${engineId}) is not on this ` +
-      `machine yet. Downloading it now — a one-time ` +
+    `The voice engine this publish narrates with (${engineId}) is not on ` +
+      `this machine yet. Downloading it now — a one-time ` +
       `${formatBytes(spec.downloadBytes)} download:`,
   );
   say(`  bisque-voice install ${engineId}`);
@@ -1204,7 +1219,7 @@ export function localVoiceRef(voiceId, engineId) {
  *  flags always win; an engine setting that contradicts the voice's own
  *  `engine:` qualifier is dropped rather than handed to bisque-voice as a
  *  conflict. */
-function applyAccountSettings(flags, me) {
+export function applyAccountSettings(flags, me) {
   const settings = accountSettings(me, publishHandle(flags, me));
   const source = settings.fromChannel
     ? `@${settings.fromChannel} setting`
@@ -1247,6 +1262,47 @@ function applyAccountSettings(flags, me) {
       say(`engine: ${settings.engine} (${source})`);
     }
   }
+}
+
+/** `--fallback-voice` is the voice for a publish that names none and has none
+ *  saved: the lowest rung, below the channel's and the account's settings, so
+ *  a caller that must always produce audio (CI) never outranks a voice the
+ *  owner picked. `--voice` is the opposite — it always wins. Runs after
+ *  applyAccountSettings, with `me` as /api/me returned it (null when the read
+ *  failed).
+ *
+ *  The fallback stands for "this account saved no voice", so it applies only
+ *  when /api/me was read and says so. An unreadable /api/me, or a saved voice
+ *  that local synthesis cannot speak (a cloud voice), is not "none saved":
+ *  narrating the fallback there is the wrong voice, published as if it were
+ *  right. Those return the reason to stop instead, before anything is
+ *  synthesized or uploaded. Returns null when publish may go on. */
+export function applyFallbackVoice(flags, me) {
+  const fallback = flags["fallback-voice"];
+  if (typeof fallback !== "string" || !fallback) return null;
+  if (flags.voice || flags.engine) return null;
+  if (!me) {
+    return (
+      "could not read this account's saved voice from bisque.cloud " +
+      "(/api/me failed, see the note above), so the voice it would narrate " +
+      `in is unknown. Not falling back to ${fallback}: that may not be the ` +
+      "voice saved for this channel. Retry, or pass --voice <engine:voice> " +
+      "to choose one."
+    );
+  }
+  const saved = accountSettings(me, publishHandle(flags, me));
+  if (saved.voiceId || saved.engine) {
+    const source = saved.fromChannel ? `@${saved.fromChannel}` : "this account";
+    return (
+      `${source} has a saved voice (${saved.engine ?? "?"}:` +
+      `${saved.voiceId ?? "?"}) that cannot be narrated here. Not falling ` +
+      `back to ${fallback}, which would publish in a different voice. Pass ` +
+      "--voice <engine:voice>, or pick a local voice at bisque.cloud/welcome."
+    );
+  }
+  flags.voice = fallback;
+  say(`voice: ${fallback} (fallback — none passed or saved)`);
+  return null;
 }
 
 // ─── doctor smoke synthesis ──────────────────────────────────────────────
@@ -1945,6 +2001,8 @@ async function cmdPublish(flags) {
       );
     }
   }
+  const noVoice = applyFallbackVoice(flags, me);
+  if (noVoice) fail(noVoice);
 
   const problems = lintPresentation(indexHtml);
   if (problems.length > 0) {
@@ -1954,7 +2012,22 @@ async function cmdPublish(flags) {
     );
   }
   const plan = narrationPlan(indexHtml);
+  // A cloned voice is named by what is cloned on this machine. Name it now,
+  // before the create below declares the voice, so the server can tell
+  // whether the audio it holds was spoken in it.
+  if (plan.length > 0 && isCloneEngine(engineFor(flags))) {
+    await ensureCloneVoiceReady(requireTts(), flags, auth, me);
+  }
   const voiceId = serverVoiceId(flags.voice);
+  // The voice the audio below is spoken in, engine-qualified, and named the
+  // same way in the create body and on every slide: the server carries a
+  // slide forward only when the voice it recorded equals the one a publish
+  // names, so a bare `--voice af_heart` recorded as-is would never match
+  // `kokoro:af_heart` and would be narrated again on every publish.
+  const narrationVoice =
+    typeof flags.voice === "string" && flags.voice
+      ? (localVoiceRef(flags.voice, engineFor(flags)) ?? flags.voice)
+      : undefined;
   if (flags.voice && !voiceId) {
     say(
       `note: voiceId ${JSON.stringify(flags.voice)} is not a shape the publish ` +
@@ -1999,6 +2072,11 @@ async function cmdPublish(flags) {
     ...(org ? { org, ...(flags.group ? { group: flags.group } : {}) } : {}),
     visibility: flags.visibility ?? (org ? "org" : "unlisted"),
     ...(voiceId ? { voiceId } : {}),
+    // The exact voice the audio below is synthesized in. `voiceId` can only
+    // name a voice the server renders itself; this one lets it refuse to
+    // carry forward audio another speaker recorded.
+    ...(narrationVoice ? { narrationVoice } : {}),
+    ...(flags.all ? { reuseAudio: false } : {}),
     // ALWAYS explicit: speechSpeed is part of the audio cache key, so the value
     // recorded at publish time has to be the exact value synthesis used.
     // Leaving it to a default on either side makes every slide stale on every
@@ -2187,6 +2265,13 @@ async function cmdPublish(flags) {
     }
     if (creation.reused?.length) {
       say(`carried forward: ${creation.reused.length} slide(s) of narration`);
+      if (flags.all) {
+        say(
+          `note: --all asked for every slide to be narrated again, and this ` +
+            `server still carried ${creation.reused.length} forward ` +
+            `(${creation.reused.join(", ")}); it predates reuseAudio.`,
+        );
+      }
     }
     if (creation.carriedAssets?.length) {
       say(
@@ -2205,7 +2290,7 @@ async function cmdPublish(flags) {
     let bin = null;
     if (needed.length > 0) {
       bin = requireTts();
-      ensureStudioEngineInstalled(bin, flags);
+      ensureEngineInstalled(bin, flags);
       ensureAlignerInstalled(bin, flags);
       await ensureCloneVoiceReady(bin, flags, auth, me);
       fs.mkdirSync(audioDir, { recursive: true });
@@ -2248,6 +2333,9 @@ async function cmdPublish(flags) {
             hash: made.hash,
             exact: made.exact,
             contentType: made.contentType,
+            // The voice this slide was spoken in, recorded on it so a later
+            // publish in another voice does not carry it forward.
+            ...(narrationVoice ? { voice: narrationVoice } : {}),
           },
           auth,
         },
@@ -2349,7 +2437,7 @@ async function cmdPublish(flags) {
   const supplied = [];
   if (stale.length > 0) {
     const bin = requireTts();
-    ensureStudioEngineInstalled(bin, flags);
+    ensureEngineInstalled(bin, flags);
     ensureAlignerInstalled(bin, flags);
     await ensureCloneVoiceReady(bin, flags, auth, me);
     fs.mkdirSync(audioDir, { recursive: true });
@@ -2386,6 +2474,7 @@ async function cmdPublish(flags) {
           hash: s.hash,
           exact: s.exact,
           contentType: s.contentType,
+          ...(narrationVoice ? { voice: narrationVoice } : {}),
         })),
       },
       auth,
@@ -3046,7 +3135,8 @@ const USAGE = `usage:
   node present.mjs plan    [--html index.html]
   node present.mjs pronunciation-report [--html index.html] --voice <engine:voice>
                            [--engine E]
-  node present.mjs publish [--html index.html] --voice <engine:voice>
+  node present.mjs publish [--html index.html] [--voice <engine:voice>]
+                           [--fallback-voice <engine:voice>]
                            [--title T] [--slug S] [--visibility unlisted|public|private]
                            [--presentation-id ID] [--handle H]
                            [--org SLUG] [--group ID]
@@ -3062,8 +3152,12 @@ const USAGE = `usage:
                            [--profile NAME]
   node present.mjs finish  --presentation ID [--profile NAME]
 
---voice/--engine fall back to the account's settings on bisque.cloud (via
-/api/me) when omitted.
+--voice/--engine fall back to the channel's, then the account's, settings on
+bisque.cloud (via /api/me) when omitted; --fallback-voice is used only when
+/api/me was read and neither names a voice. If /api/me cannot be read, or the
+saved voice is not a local one, a publish with --fallback-voice and no --voice
+stops before narrating. Whatever engine that resolves to is installed on first
+use.
 
 --made-with credits the models behind the presentation. Pass the model you are
 running as ("Claude Opus 5", "GPT-5.4 mini"); the narrating voice is added for

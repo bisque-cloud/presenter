@@ -1,17 +1,17 @@
 // Step: narrate on this runner with bisque-voice, then publish through the
 // present skill. This step is the only one that holds the Bisque credential,
 // and it runs a fresh copy of the skill whose hash it verifies first.
-import { execFileSync, spawnSync } from "node:child_process";
-import { cpSync, existsSync, readFileSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { cpSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { fail, output, run, warn, workDir } from "./action-step.ts";
 import { installBisqueVoice } from "./install-bisque-voice.ts";
 import { ghJson } from "./github-cli.ts";
+import { voiceArgs } from "./voice-args.ts";
 
 const work = workDir();
 const out = join(work, "out");
 const actionPath = process.env.ACTION_PATH;
-const voice = process.env.VOICE || "kokoro:af_heart";
 let visibility = process.env.VISIBILITY || "";
 
 // The skill copy the agent could reach is not the one that runs here.
@@ -24,32 +24,20 @@ rmSync(fresh, { recursive: true, force: true });
 cpSync(join(actionPath, "skills", "present"), fresh, { recursive: true });
 const presentMjs = join(fresh, "scripts", "present.mjs");
 
-if (!voice.includes(":"))
-  fail(
-    `voice must be engine-qualified, like kokoro:af_heart; got '${voice}'. Run 'bisque-voice engines' for the engine ids.`,
-  );
-const engine = voice.split(":")[0];
+let voiceFlags: string[];
+try {
+  voiceFlags = voiceArgs(process.env.VOICE);
+} catch (err) {
+  fail(err instanceof Error ? err.message : String(err));
+}
 
 // A pinned, checksummed tarball rather than a piped install script; see
-// install-bisque-voice.ts.
+// install-bisque-voice.ts. The speech model is not installed here: publish
+// resolves the voice (the input, else the channel's or account's saved one,
+// else the fallback) and installs whichever engine that names, once, into the
+// cached ~/.bisque/models.
 const bv = installBisqueVoice();
 run(bv, ["--version"]);
-const engines = JSON.parse(
-  execFileSync(bv, ["engines", "--json"], { encoding: "utf8" }),
-);
-const hit = (Array.isArray(engines) ? engines : engines.engines || []).find(
-  (e) => e.id === engine,
-);
-if (!hit)
-  fail(
-    `'${engine}' is not a bisque-voice engine. Run 'bisque-voice engines' for the ids.`,
-  );
-if (!hit.installed) {
-  console.log(
-    `Installing the ${engine} speech model (cached for the next run)`,
-  );
-  run(bv, ["install", engine]);
-}
 
 // Visibility: an explicit input wins. Otherwise a public repository's
 // explainer is public, like the release it explains, and a private
@@ -71,8 +59,7 @@ const args = [
   "publish",
   "--html",
   "index.html",
-  "--voice",
-  voice,
+  ...voiceFlags,
   "--title",
   process.env.TITLE || "",
   "--slug",

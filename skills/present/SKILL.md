@@ -208,7 +208,6 @@ in `.bisque.json`. Do not pass `--handle` with `--org`.
 
 ```sh
 node present.mjs publish --html index.html \
-  --voice kokoro:af_heart \
   --title "Q3 Review" \
   --visibility unlisted \
   --made-with "Claude Opus 5" \
@@ -232,18 +231,19 @@ Add `--engine`/`--align` when more than one is installed, `--speed` (default
 prints the `webUrl` — give that to the user. Report any `staleSlides` or
 warnings it prints rather than hiding them.
 
-`publish` preflights the account first: a missing username stops the run before
-any synthesis (see "No username" above), and when `--voice`/`--engine` are
-omitted the account's settings on bisque.cloud fill them in — it says so when
-it does. Explicit flags always win over settings.
+Pass `--voice` only when the user picked a voice in this conversation (step 1
+or by naming one). Otherwise leave it off: `publish` preflights the account, and
+when `--voice`/`--engine` are omitted the channel's saved voice, else the
+account's, on bisque.cloud fills them in — it says so when it does. A `--voice`
+you add yourself outranks the voice the owner saved, so never pass one by
+habit. A missing username stops the run before any synthesis (see "No
+username" above).
 
-When the engine to synthesize with is a Studio engine (`qwen3-clone-*`,
-`qwen3-voices-*`) that is
-not installed on this machine — typically because it was picked in the welcome
-flow on bisque.cloud — `publish` says what it is about to download and how
-large (from `bisque-voice engines --json`), then runs `bisque-voice install`
-itself before synthesizing. Relay that message to the user in plain language;
-there is nothing else to do.
+When the engine to synthesize with is not installed on this machine —
+typically because it was picked in the welcome flow on bisque.cloud — `publish`
+says what it is about to download and how large (from `bisque-voice engines
+--json`), then runs `bisque-voice install` itself before synthesizing. Relay
+that message to the user in plain language; there is nothing else to do.
 
 For a clone engine (`qwen3-clone-*`), `publish` also makes sure the voice
 itself exists: if this machine has no cloned voice for that engine, it fetches
@@ -264,9 +264,11 @@ Editing a slide and re-running the same `publish` command is the whole point:
 So a one-slide fix costs one slide of synthesis, not the whole presentation, and
 an HTML-only edit (layout, colors, a cue marker moved) costs none at all. Pass
 the same `--title`/`--slug`/`--presentation-id`/`--speed` as before, or it is a
-different presentation. Use `--all` only to deliberately re-synthesize
-everything — e.g. after changing voice, which does **not** invalidate the
-carried-forward audio on its own.
+different presentation. A different voice re-narrates every slide on its own:
+audio is carried forward only in the voice it was spoken in. Audio published
+before slides recorded their voice is narrated again once, on the next publish,
+and carried forward after that. Use `--all` only to deliberately re-synthesize
+everything.
 
 ## 6. A video, if they want one
 

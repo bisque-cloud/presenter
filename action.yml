@@ -78,9 +78,15 @@ inputs:
     description: The Bisque user id that owns the API key.
     required: true
   voice:
-    description: A bisque-voice voice id, engine-qualified. Narration runs on this runner.
+    description: >-
+      A bisque-voice voice id, engine-qualified, like kokoro:af_heart. Narration
+      runs on this runner. Empty uses the voice saved for the channel, else the
+      account, on bisque.cloud, and kokoro:af_heart when neither saved one.
+      If bisque.cloud cannot be read, the run fails rather than guess a voice.
+      Whatever engine that names is downloaded on the first run and cached; a
+      Studio voice (qwen3-*) is a multi-gigabyte download.
     required: false
-    default: "kokoro:af_heart"
+    default: ""
   visibility:
     description: >-
       public or unlisted. Empty means public for a public repository and
@@ -187,11 +193,15 @@ runs:
         WORK: ${{ runner.temp }}/release-explainer
       run: node "${{ github.action_path }}/action/src/check-presentation-structure.ts" "$WORK/out"
 
-    - name: Cache the speech model
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+    # Restore and save are split because the voice is not known until publish
+    # resolves it from the account, so the saved key is named after the models
+    # actually installed, not after an input that may be empty.
+    - name: Restore the speech models
+      id: models-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.bisque/models
-        key: bisque-voice-models-${{ runner.os }}-${{ runner.arch }}-${{ inputs.voice }}-v1
+        key: bisque-voice-models-${{ runner.os }}-${{ runner.arch }}-v2
         restore-keys: |
           bisque-voice-models-${{ runner.os }}-${{ runner.arch }}-
 
@@ -211,6 +221,21 @@ runs:
         TITLE: ${{ steps.source.outputs.title }}
         SLUG: ${{ steps.source.outputs.slug }}
       run: node "${{ github.action_path }}/action/src/narrate-and-publish.ts"
+
+    - name: Name the installed speech models
+      id: models
+      if: always()
+      shell: bash
+      run: |
+        key=$(cd ~/.bisque/models 2>/dev/null && ls -d */ 2>/dev/null | tr -d / | sort | paste -sd+ -)
+        echo "key=$key" >> "$GITHUB_OUTPUT"
+
+    - name: Save the speech models
+      if: always() && steps.models.outputs.key != '' && steps.models-cache.outputs.cache-matched-key != format('bisque-voice-models-{0}-{1}-{2}-v2', runner.os, runner.arch, steps.models.outputs.key)
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.bisque/models
+        key: bisque-voice-models-${{ runner.os }}-${{ runner.arch }}-${{ steps.models.outputs.key }}-v2
 
     # The agent's working directory, minus the proxy state, so a bad run can
     # be read from the job page instead of reproduced.
