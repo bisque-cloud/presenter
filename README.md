@@ -197,12 +197,18 @@ in [`action.yml`](./action.yml).
 
 ## Install
 
-Both plugins live in one marketplace. In Claude Code:
+Both plugins live in one marketplace. In Claude Code, from a terminal:
 
+```sh
+claude plugin marketplace add bisque-cloud/presenter
+claude plugin install presenter@bisque-cloud
 ```
-/plugin marketplace add bisque-cloud/presenter
-/plugin install presenter@bisque-cloud
-```
+
+Adding the marketplace installs nothing on its own; the second command installs
+`present`, `watch`, and `video` as the `presenter` plugin, so the main skill is
+`/presenter:present`. Inside a Claude Code session, the same two steps are
+`/plugin marketplace add bisque-cloud/presenter` and
+`/plugin install presenter@bisque-cloud`.
 
 In Claude Cowork, open **Customize → Plugins → Add marketplace**, enter
 `bisque-cloud/presenter`, and install **Bisque**. It connects to your account
