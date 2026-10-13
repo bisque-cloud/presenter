@@ -170,6 +170,12 @@ the first slide still leaves with the finding.
 
 ### Check pronunciations before synthesizing
 
+**A presentation narrated by a Kokoro voice MUST run this report before
+`publish`, on the final narration, and again after any narration edit.**
+`plan` is not a substitute: `plan` shows the words, only the report shows the
+sounds. If the report cannot run, say so in your reply rather than publishing
+as if it had.
+
 ```sh
 node present.mjs pronunciation-report --html index.html --voice <engine:voice>
 ```
@@ -182,6 +188,13 @@ is facts only — it flags nothing, and you judge every word:
    and product words (`inLexicon: false` means the pronunciation was guessed
    from the spelling) and words with `readings` above 1 (a reading was chosen
    for that occurrence; check it is the one the sentence means).
+   **Short capitals read as a word.** Kokoro resolves a two- or three-letter
+   all-caps word through its lowercase entry, so `US` respells as `UHS`
+   ("us"), `ID` as `IHD` ("id"), `IT` as `IHT` ("it"), and the report calls
+   each `inLexicon: true` with one reading. Every such word is a decision you
+   make: letters (`[US](U-S)`, `[ID](eye dee)`, `[IT](eye tee)`), a name
+   (`[HN](Hacker News)`), or a word that happens to be capitalised. Only the
+   last stays unmarked.
 2. For a word said wrong, write a marker with your best IPA into the slide's
    narration — `[Kokoro](/kˈOkOɹO/)` — and run the report again. The reported
    `respelled` for that word is the verdict. The engine's notation differs
@@ -195,6 +208,8 @@ is facts only — it flags nothing, and you judge every word:
 the `reason` field says why. That is not a pass — tell the user no automated
 check ran for that voice. Markers still work there, judged by ear.
 
+When you publish, list the words you marked, in one line.
+
 ### Publishing into a company (bisque.team)
 
 If the user asks to publish for their team or company, add `--org <slug>`
@@ -205,6 +220,9 @@ always publishes to one company can pin it once with `{"org": "<slug>"}`
 in `.bisque.json`. Do not pass `--handle` with `--org`.
 
 ## 4. Publish
+
+With a Kokoro voice, publish only after the pronunciation report has run on
+this exact narration and you have read it.
 
 ```sh
 node present.mjs publish --html index.html \
@@ -385,6 +403,9 @@ the ordinary way when the work is done.
   where it is installed.
 - Never silently move a user from free local narration to billed cloud
   narration.
+- A Kokoro voice is never published without `pronunciation-report` run on the
+  final narration and read word by word. Short all-caps words (`US`, `ID`,
+  `IT`) read as words unless marked.
 - Don't inline the format spec, and don't hand-edit `presentation.json` — the
   server assembles it so every producer computes cues the same way.
 - Never `finish` a live presentation while a `wait` is still open or the
