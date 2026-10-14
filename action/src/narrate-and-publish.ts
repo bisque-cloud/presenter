@@ -14,6 +14,22 @@ const out = join(work, "out");
 const actionPath = process.env.ACTION_PATH;
 let visibility = process.env.VISIBILITY || "";
 
+// Who publishes: a Bisque account's key, or, with none, this repository
+// itself through the run's GitHub OIDC identity. Checked before anything is
+// installed or narrated, so a missing permission costs seconds, not minutes.
+if (process.env.BISQUE_GITHUB_OIDC === "1") {
+  if (!process.env.ACTIONS_ID_TOKEN_REQUEST_URL) {
+    fail(
+      "No bisque-api-key, so this publishes as the repository, and that needs the workflow to grant `permissions: id-token: write`.",
+    );
+  }
+  console.log(
+    `publishing as ${process.env.REPO} to its own channel (GitHub OIDC, no Bisque account)`,
+  );
+} else if (!process.env.BISQUE_USER_ID) {
+  fail("bisque-api-key is set without bisque-user-id; pass both, or neither.");
+}
+
 // The skill copy the agent could reach is not the one that runs here.
 run("node", [
   new URL("./install-and-verify-skill.ts", import.meta.url).pathname,

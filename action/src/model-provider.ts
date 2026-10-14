@@ -1,6 +1,12 @@
 // Which provider a run uses, which model it defaults to, and where that
 // provider's API lives.
 //
+// `claude-code` is the one provider that is a subscription rather than an
+// API key: the token `claude setup-token` prints, which bills a Claude Pro,
+// Max, Team or Enterprise plan. Anthropic's terms allow that token only in
+// Claude Code itself, so this provider runs Claude Code where every other
+// provider runs OpenCode, behind the same key proxy.
+//
 // The maintainer supplies one provider key and nothing else. That key names
 // the provider, so the action can pick a model known to write well for it
 // rather than making them choose one. `model` overrides the default, and
@@ -11,11 +17,18 @@
 // each provider's SDK expects under the base URL, so the key proxy can sit
 // in front without that prefix appearing twice.
 
-export type Provider = "anthropic" | "openai" | "google" | "xai";
+export type Provider =
+  | "claude-code"
+  | "anthropic"
+  | "openai"
+  | "google"
+  | "xai";
 
 export type ProviderSpec = {
   /** The action input carrying this provider's key. */
   input: string;
+  /** The harness that runs the model. */
+  engine: "opencode" | "claude-code";
   /**
    * What this provider runs when `model` is empty. These are the strongest
    * general models each provider offers, not the cheapest: an explainer is
@@ -40,10 +53,29 @@ export type ProviderSpec = {
  * order is by how good the default model is rather than alphabetical.
  */
 export const PROVIDERS: Array<[Provider, ProviderSpec]> = [
+  // First: a plan someone already pays for comes before a metered key.
+  [
+    "claude-code",
+    {
+      input: "claude-code-oauth-token",
+      engine: "claude-code",
+      // Whatever model the plan's Claude Code defaults to; `model` names
+      // another, as anthropic/<id> or claude-code/<id>.
+      defaultModel: "default",
+      defaultVariant: "",
+      origin: "https://api.anthropic.com",
+      // Claude Code sends a subscription token as a bearer token, to
+      // ANTHROPIC_BASE_URL like every other request it makes.
+      header: "authorization",
+      prefix: "Bearer ",
+      basePath: "",
+    },
+  ],
   [
     "anthropic",
     {
       input: "anthropic-api-key",
+      engine: "opencode",
       defaultModel: "claude-opus-5",
       defaultVariant: "medium",
       origin: "https://api.anthropic.com",
@@ -56,6 +88,7 @@ export const PROVIDERS: Array<[Provider, ProviderSpec]> = [
     "openai",
     {
       input: "openai-api-key",
+      engine: "opencode",
       defaultModel: "gpt-5.6-sol",
       defaultVariant: "medium",
       origin: "https://api.openai.com",
@@ -68,6 +101,7 @@ export const PROVIDERS: Array<[Provider, ProviderSpec]> = [
     "google",
     {
       input: "google-api-key",
+      engine: "opencode",
       defaultModel: "gemini-3.1-pro-preview",
       defaultVariant: "",
       origin: "https://generativelanguage.googleapis.com",
@@ -80,6 +114,7 @@ export const PROVIDERS: Array<[Provider, ProviderSpec]> = [
     "xai",
     {
       input: "xai-api-key",
+      engine: "opencode",
       defaultModel: "grok-4.6",
       defaultVariant: "",
       origin: "https://api.x.ai",
@@ -135,6 +170,16 @@ export function resolveRun(
   }
 
   if (model) {
+    // A Claude model named with only a subscription token runs on the
+    // subscription, through Claude Code.
+    const claudeCode = (keys["claude-code"] ?? "").trim();
+    if (
+      claudeCode &&
+      !(keys.anthropic ?? "").trim() &&
+      providerOf(model) === "anthropic"
+    ) {
+      model = `claude-code/${model.slice("anthropic/".length)}`;
+    }
     if (!model.includes("/")) {
       return {
         error: `model must be provider/model, like anthropic/${BY_ID.get("anthropic")!.defaultModel}; got '${model}'. See https://models.dev for the catalog.`,
@@ -164,11 +209,12 @@ export function resolveRun(
   };
 }
 
-/** Read the four key inputs out of the step environment. */
+/** Read the key inputs out of the step environment. */
 export function keysFromEnv(
   env: Record<string, string | undefined>,
 ): Partial<Record<Provider, string>> {
   return {
+    "claude-code": env.CLAUDE_CODE_OAUTH_TOKEN ?? "",
     anthropic: env.ANTHROPIC_API_KEY ?? "",
     openai: env.OPENAI_API_KEY ?? "",
     google: env.GOOGLE_API_KEY ?? "",

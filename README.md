@@ -147,33 +147,41 @@ on:
     types: [published]
 permissions:
   contents: write # append the watch link to the release notes
+  id-token: write # publish as this repository, no Bisque account
 jobs:
   explain:
     runs-on: ubuntu-latest
     steps:
       - uses: bisque-cloud/presenter@v1
         with:
-          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-          bisque-api-key: ${{ secrets.BISQUE_API_KEY }}
-          bisque-user-id: ${{ secrets.BISQUE_USER_ID }}
+          claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 ```
 
-Set one provider key. It names the provider, and the provider picks the
+That is the only secret. `claude setup-token` makes it, and it runs on your
+Claude plan. The explainer publishes to your repository's own channel,
+`bisque.today/p/{owner}/{repo}`, using the GitHub-signed identity of the
+workflow run, so there is no Bisque account to create. Whoever owns the
+repository can claim that channel by signing in with GitHub. Setup steps an
+agent can follow: [bisque.today/docs/github](https://bisque.today/docs/github).
+
+Set one key or token. It names the provider, and the provider picks the
 model, so the shortest useful workflow chooses nothing:
 
-| Key you set         | What authors the explainer     |
-| ------------------- | ------------------------------ |
-| `anthropic-api-key` | `claude-opus-5`, medium effort |
-| `openai-api-key`    | `gpt-5.6-sol`, medium effort   |
-| `google-api-key`    | `gemini-3.1-pro-preview`       |
-| `xai-api-key`       | `grok-4.6`                     |
+| Key you set               | What authors the explainer                       |
+| ------------------------- | ------------------------------------------------ |
+| `claude-code-oauth-token` | Claude Code on your Claude plan, its own default |
+| `anthropic-api-key`       | `claude-opus-5`, medium effort                   |
+| `openai-api-key`          | `gpt-5.6-sol`, medium effort                     |
+| `google-api-key`          | `gemini-3.1-pro-preview`                         |
+| `xai-api-key`             | `grok-4.6`                                       |
 
 Each is the strongest general model that provider offers rather than the
 cheapest, because the explainer is read by everyone deciding whether to
 upgrade. Add `model: anthropic/claude-sonnet-4-6` to spend less, or any other
 id from [models.dev](https://models.dev) to use something else;
 [OpenCode](https://opencode.ai) runs it, so a new model needs no new release
-of this action.
+of this action. A Claude plan token runs in Claude Code instead, the only
+harness that token may be used in.
 
 The agent reads the release notes and the diff since the previous tag through
 the API, authors the presentation with the `present` skill from this same
@@ -182,9 +190,10 @@ Authoring is one model run on your key; narration, publishing and hosting are
 free. A private repository's explainer is unlisted unless you say otherwise.
 
 The agent never holds a credential. Its model calls go through a local proxy
-that holds your key and rewrites the auth header, so the key is in no
-environment the agent or its tools can read, and the publishing step refuses
-to run a skill whose hash changed while the agent ran.
+that holds your key or token and rewrites the auth header, so it is in no
+environment the agent or its tools can read; the means to mint the run's
+GitHub identity is removed from the agent's step too; and the publishing step
+refuses to run a skill whose hash changed while the agent ran.
 
 The same step explains a pull request when a collaborator comments `/explain`
 on it, after a step checks they have write access. A pull request is text you

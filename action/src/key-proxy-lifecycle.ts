@@ -42,6 +42,7 @@ async function start(): Promise<void> {
   const env = { ...process.env };
   delete env.API_KEY;
   for (const p of [
+    "CLAUDE_CODE_OAUTH_TOKEN",
     "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY",
     "GEMINI_API_KEY",
@@ -95,6 +96,7 @@ async function start(): Promise<void> {
   output("model", model);
   output("variant", variant);
   output("base-path", upstream.basePath);
+  output("engine", upstream.engine);
   console.log(
     `${model}${variant ? ` (${variant})` : ""} — key proxy on 127.0.0.1:${port} (pid ${child.pid})`,
   );

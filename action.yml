@@ -1,16 +1,23 @@
 name: Release Explainer
 description: >-
   Narrated explainer of every release, made by the model you already pay for
-  and posted where the release is read. Bring your own key. Also explains
-  pull requests.
+  and posted where the release is read. Bring your own key or your Claude
+  plan; no Bisque account needed. Also explains pull requests.
 author: Bisque
 branding:
   icon: play-circle
   color: orange
 
 inputs:
-  # Set one of these four. The key names the provider, and the provider
-  # decides the model, so the simplest workflow names no model at all.
+  # Set one of these. The key names the provider, and the provider decides
+  # the model, so the simplest workflow names no model at all.
+  claude-code-oauth-token:
+    description: >-
+      Runs Claude Code on your Claude Pro, Max, Team or Enterprise plan. Make
+      one with `claude setup-token`. Defaults to the model Claude Code picks
+      for your plan.
+    required: false
+    default: ""
   anthropic-api-key:
     description: Runs Anthropic. Defaults to claude-opus-5 at medium effort.
     required: false
@@ -40,6 +47,12 @@ inputs:
     description: Reasoning effort, where the provider has one (for example high, max, minimal).
     required: false
     default: ""
+  claude-code-version:
+    description: >-
+      The Claude Code release that runs a `claude-code-oauth-token`. Pinned for
+      the same reason as opencode-version.
+    required: false
+    default: "2.1.296"
   opencode-version:
     description: >-
       The OpenCode release that runs the model. Pinned so an upstream release
@@ -71,12 +84,18 @@ inputs:
 
   bisque-api-key:
     description: >-
-      Bisque agent API key. Identifies the channel the explainer publishes to.
-      Pair it with bisque-user-id.
-    required: true
+      Optional. Without it the explainer publishes to this repository's own
+      channel, bisque.today/p/{owner}/{repo}, using the GitHub-signed identity
+      of the workflow run (it needs `permissions: id-token: write`). The
+      repository's owner claims that channel by signing in with GitHub. With a
+      Bisque agent API key it publishes to that account instead; pair it with
+      bisque-user-id.
+    required: false
+    default: ""
   bisque-user-id:
-    description: The Bisque user id that owns the API key.
-    required: true
+    description: The Bisque user id that owns bisque-api-key.
+    required: false
+    default: ""
   voice:
     description: >-
       A bisque-voice voice id, engine-qualified, like kokoro:af_heart. Narration
@@ -141,15 +160,6 @@ runs:
         ACTION_PATH: ${{ github.action_path }}
       run: node "${{ github.action_path }}/action/src/install-and-verify-skill.ts" hash
 
-    # A pinned npm release rather than `curl | bash`: the version is visible
-    # in the workflow, npm verifies the package, and an upstream release
-    # cannot change what this action does without an edit here.
-    - name: Install OpenCode
-      shell: bash
-      env:
-        OPENCODE_VERSION: ${{ inputs.opencode-version }}
-      run: npm install -g --no-fund --no-audit "opencode-ai@${OPENCODE_VERSION}"
-
     # The only step that holds the provider key. It hands the key to a local
     # proxy over stdin and exits, so the agent step below runs with no key in
     # its environment and none in any process environment it can read.
@@ -159,12 +169,30 @@ runs:
       env:
         MODEL: ${{ inputs.model }}
         VARIANT: ${{ inputs.variant }}
+        CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude-code-oauth-token }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         OPENAI_API_KEY: ${{ inputs.openai-api-key }}
         GOOGLE_API_KEY: ${{ inputs.google-api-key }}
         XAI_API_KEY: ${{ inputs.xai-api-key }}
         WORK: ${{ runner.temp }}/release-explainer
       run: node "${{ github.action_path }}/action/src/key-proxy-lifecycle.ts" start
+
+    # A pinned npm release rather than `curl | bash`: the version is visible
+    # in the workflow, npm verifies the package, and an upstream release
+    # cannot change what this action does without an edit here.
+    - name: Install OpenCode
+      if: steps.proxy.outputs.engine == 'opencode'
+      shell: bash
+      env:
+        OPENCODE_VERSION: ${{ inputs.opencode-version }}
+      run: npm install -g --no-fund --no-audit "opencode-ai@${OPENCODE_VERSION}"
+
+    - name: Install Claude Code
+      if: steps.proxy.outputs.engine == 'claude-code'
+      shell: bash
+      env:
+        CLAUDE_CODE_VERSION: ${{ inputs.claude-code-version }}
+      run: npm install -g --no-fund --no-audit "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
 
     - name: Author with ${{ steps.proxy.outputs.model }}
       id: agent
@@ -178,7 +206,14 @@ runs:
         PROXY_PORT: ${{ steps.proxy.outputs.port }}
         ACTION_PATH: ${{ github.action_path }}
         WORK: ${{ runner.temp }}/release-explainer
-      run: node "${{ github.action_path }}/action/src/run-agent-headless.ts"
+      # The runner hands every step the means to mint this job's GitHub OIDC
+      # token, which is what publishes. `exec env -u` drops them before node
+      # starts, so the agent cannot read them back from its parent process
+      # (/proc/<pid>/environ shows the environment of the last exec).
+      run: >-
+        exec env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL
+        -u ACTIONS_RUNTIME_TOKEN -u ACTIONS_RESULTS_URL
+        node "${{ github.action_path }}/action/src/run-agent-headless.ts"
 
     - name: Stop the key proxy
       if: always()
@@ -211,6 +246,9 @@ runs:
       env:
         BISQUE_API_KEY: ${{ inputs.bisque-api-key }}
         BISQUE_USER_ID: ${{ inputs.bisque-user-id }}
+        # No Bisque key: publish as this repository, with the run's GitHub
+        # identity, to bisque.today/p/{owner}/{repo}.
+        BISQUE_GITHUB_OIDC: ${{ inputs.bisque-api-key == '' && '1' || '' }}
         GH_TOKEN: ${{ inputs.github-token }}
         REPO: ${{ github.repository }}
         ACTION_PATH: ${{ github.action_path }}
@@ -261,5 +299,7 @@ runs:
         TITLE: ${{ steps.source.outputs.title }}
         WATCH_URL: ${{ steps.publish.outputs.watch-url }}
         PRESENTATION_ID: ${{ steps.publish.outputs.presentation-id }}
-        BISQUE_USER_ID: ${{ inputs.bisque-user-id }}
+        # Whose storage the poster image is under: the account, or the
+        # repository channel's principal.
+        BISQUE_USER_ID: ${{ inputs.bisque-api-key != '' && inputs.bisque-user-id || format('github-repo-{0}', github.repository_id) }}
       run: node "${{ github.action_path }}/action/src/post-watch-link.ts"

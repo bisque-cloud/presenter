@@ -1,7 +1,13 @@
 # Comment `/explain` on a pull request and get a narrated walkthrough of it
 # for the reviewers. The first step checks the commenter's actual repository
-# permission, so the model key is spent only on request and only by people
-# who could merge the pull request.
+# permission, so your model is spent only on request and only by people who
+# could merge the pull request.
+#
+# One secret: CLAUDE_CODE_OAUTH_TOKEN, from `claude setup-token`, which runs
+# on your Claude plan. (Or set one API key instead, see action.yml.) No
+# Bisque account: the explainer publishes to this repository's own channel,
+# bisque.today/p/{owner}/{repo}, with the run's GitHub identity, which is
+# what `id-token: write` grants.
 #
 # A pull request from a stranger is text you did not write. On a repository
 # that takes those, add `network: deny` below: the agent then has no shell
@@ -15,30 +21,36 @@ on:
 permissions:
   contents: read
   pull-requests: write # post the watch link as a comment
+  issues: write # react to the /explain comment
+  id-token: write # publish as this repository, no Bisque account
 
 jobs:
   explain:
+    # Exactly `/explain`, bare or followed by a space, so `/explainer` does
+    # not trigger a run.
     if: >-
       github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/explain')
+      (github.event.comment.body == '/explain' ||
+       startsWith(github.event.comment.body, '/explain '))
     runs-on: ubuntu-latest
     steps:
       # Expressions go through the environment, never into the script text,
       # per GitHub's security hardening guide.
-      - name: Require write access
+      - name: Require write access, and react so the commenter knows
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           ACTOR: ${{ github.actor }}
+          COMMENT_ID: ${{ github.event.comment.id }}
         run: |
           perm="$(gh api "repos/$REPO/collaborators/$ACTOR/permission" --jq .permission)"
           case "$perm" in
             write|maintain|admin) echo "$ACTOR: $perm" ;;
             *) echo "::error::$ACTOR has '$perm' permission; /explain needs write."; exit 1 ;;
           esac
+          gh api --silent -X POST \
+            "repos/$REPO/issues/comments/$COMMENT_ID/reactions" -f content=eyes
       - uses: bisque-cloud/presenter@v1
         with:
           source: pull-request
-          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-          bisque-api-key: ${{ secrets.BISQUE_API_KEY }}
-          bisque-user-id: ${{ secrets.BISQUE_USER_ID }}
+          claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

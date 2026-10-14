@@ -717,7 +717,11 @@ function ensureEngineInstalled(bin, flags) {
       `${formatBytes(spec.downloadBytes)} download:`,
   );
   say(`  bisque-voice install ${engineId}`);
-  const res = spawnSync(bin, ["install", engineId], { stdio: "inherit" });
+  // stdout goes to stderr: `install` prints the model path on stdout, and
+  // publish's stdout is the one JSON result a caller parses.
+  const res = spawnSync(bin, ["install", engineId], {
+    stdio: ["inherit", process.stderr, "inherit"],
+  });
   if (res.error) {
     fail(`could not run bisque-voice install: ${res.error.message}`);
   }
@@ -762,7 +766,9 @@ function ensureAlignerInstalled(bin, flags) {
       `${formatBytes(spec.downloadBytes)} download:`,
   );
   say(`  bisque-voice install ${spec.id}`);
-  const res = spawnSync(bin, ["install", spec.id], { stdio: "inherit" });
+  const res = spawnSync(bin, ["install", spec.id], {
+    stdio: ["inherit", process.stderr, "inherit"],
+  });
   if (res.error || res.status !== 0) {
     say(
       `note: aligner install failed — continuing with the engine's own ` +
@@ -1028,6 +1034,18 @@ export function resolveAuth({ profile, cwd = process.cwd() } = {}) {
   if (envKey && envUser) {
     return { apiKey: envKey, userId: envUser, from: "environment" };
   }
+  // A GitHub Actions job publishing as its repository: no Bisque account, the
+  // job's own GitHub-signed identity instead. Opt-in, so a self-hosted runner
+  // with a saved profile never switches identity because a workflow happens
+  // to hold `id-token: write`.
+  if (process.env.BISQUE_GITHUB_OIDC === "1") {
+    return {
+      apiKey: "github-oidc",
+      userId: "",
+      githubOidc: true,
+      from: "environment (GitHub Actions OIDC)",
+    };
+  }
   const profiles = readConfig()?.profiles ?? {};
   const usable = Object.entries(profiles)
     .filter(([, p]) => p?.apiKey && p?.userId)
@@ -1080,7 +1098,42 @@ function requireAuth(flags = {}, cwd = process.cwd()) {
   );
 }
 
-function authHeaders(auth) {
+/** The audience the server checks on a GitHub OIDC token. */
+const GITHUB_OIDC_AUDIENCE = "bisque.cloud";
+let githubOidcCache = null;
+
+/**
+ * A GitHub Actions OIDC token for this job, minted the way `actions/core`
+ * does. GitHub's tokens live minutes and narration can outlast one, so each
+ * request gets a token at most a minute old rather than one from the start.
+ */
+async function githubOidcToken() {
+  if (githubOidcCache && Date.now() - githubOidcCache.at < 60_000) {
+    return githubOidcCache.value;
+  }
+  const url = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+  const token = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+  if (!url || !token) {
+    fail(
+      "BISQUE_GITHUB_OIDC=1 needs a GitHub Actions job that may request an " +
+        "OIDC token: add `permissions: id-token: write` to the workflow.",
+    );
+  }
+  const u = new URL(url);
+  u.searchParams.set("audience", GITHUB_OIDC_AUDIENCE);
+  const res = await fetch(u, { headers: { authorization: `bearer ${token}` } });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || typeof body.value !== "string") {
+    fail(`GitHub would not issue an OIDC token (HTTP ${res.status}).`);
+  }
+  githubOidcCache = { value: body.value, at: Date.now() };
+  return body.value;
+}
+
+async function authHeaders(auth) {
+  if (auth.githubOidc) {
+    return { authorization: `Bearer ${await githubOidcToken()}` };
+  }
   return {
     authorization: `Bearer ${auth.apiKey}`,
     "x-bisque-user-id": auth.userId,
@@ -1102,7 +1155,7 @@ async function api(target, { method = "POST", body, auth } = {}) {
   const res = await fetch(url, {
     method,
     headers: {
-      ...(auth ? authHeaders(auth) : {}),
+      ...(auth ? await authHeaders(auth) : {}),
       ...(body === undefined ? {} : { "content-type": "application/json" }),
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -1277,11 +1330,11 @@ export function applyAccountSettings(flags, me) {
  *  narrating the fallback there is the wrong voice, published as if it were
  *  right. Those return the reason to stop instead, before anything is
  *  synthesized or uploaded. Returns null when publish may go on. */
-export function applyFallbackVoice(flags, me) {
+export function applyFallbackVoice(flags, me, { accountless = false } = {}) {
   const fallback = flags["fallback-voice"];
   if (typeof fallback !== "string" || !fallback) return null;
   if (flags.voice || flags.engine) return null;
-  if (!me) {
+  if (!me && !accountless) {
     return (
       "could not read this account's saved voice from bisque.cloud " +
       "(/api/me failed, see the note above), so the voice it would narrate " +
@@ -1984,7 +2037,9 @@ async function cmdPublish(flags) {
   // bisque.cloud fill in --voice/--engine when they were not passed. Both
   // degrade to today's behavior when /api/me is unavailable, and the 412
   // handler below remains as the fallback.
-  const me = await fetchMeSafe(auth);
+  // A repository publishing with its GitHub identity has no account, so
+  // there is no saved voice to read and nothing to wait for.
+  const me = auth.githubOidc ? null : await fetchMeSafe(auth);
   if (me) {
     applyAccountSettings(flags, me);
     if (me.account && !me.account.username && !flags.handle) {
@@ -2001,7 +2056,9 @@ async function cmdPublish(flags) {
       );
     }
   }
-  const noVoice = applyFallbackVoice(flags, me);
+  const noVoice = applyFallbackVoice(flags, me, {
+    accountless: Boolean(auth.githubOidc),
+  });
   if (noVoice) fail(noVoice);
 
   const problems = lintPresentation(indexHtml);
@@ -3076,7 +3133,10 @@ async function cmdSpec(flags) {
     cwd: process.cwd(),
   });
   const headers = { accept: "text/markdown" };
-  if (auth?.apiKey) Object.assign(headers, authHeaders(auth));
+  // The spec is public; only an account's key adds anything to it.
+  if (auth?.apiKey && !auth.githubOidc) {
+    Object.assign(headers, await authHeaders(auth));
+  }
 
   // Path form first (the canonical spelling; unknown names 404 loudly).
   // Fall back to the legacy ?part= query for servers that predate path
@@ -3183,8 +3243,10 @@ printing the id.
 --org publishes into a company's library on bisque.team (members only by
 default); a repo can pin it with {"org": "<slug>"} in .bisque.json.
 
-Credentials: BISQUE_API_KEY + BISQUE_USER_ID, else --profile / BISQUE_PROFILE /
-.bisque.json's "profile", else the single profile in ~/.bisque/config.json.`;
+Credentials: BISQUE_API_KEY + BISQUE_USER_ID, else BISQUE_GITHUB_OIDC=1 in a
+GitHub Actions job with id-token: write (publishes to /p/{owner}/{repo}, no
+Bisque account), else --profile / BISQUE_PROFILE / .bisque.json's "profile",
+else the single profile in ~/.bisque/config.json.`;
 
 async function main() {
   if (typeof fetch !== "function") {

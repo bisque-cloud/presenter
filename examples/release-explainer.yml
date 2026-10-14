@@ -1,8 +1,10 @@
 # Every published release gets a narrated explainer, linked from the release
-# notes. Set one provider key and the action picks that provider's best
-# model for the job; add `model:` to name a different one. Authoring runs on
-# your key, narration runs on this runner, and the Bisque key only names the
-# channel the page lands on.
+# notes. Set one secret: CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token`
+# runs on your Claude plan, or set one provider API key instead and the
+# action picks that provider's best model; add `model:` to name a different
+# one. Authoring runs on your plan or key, narration runs on this runner, and
+# the explainer publishes to this repository's own channel,
+# bisque.today/p/{owner}/{repo}, with the run's GitHub identity.
 name: Release explainer
 
 on:
@@ -11,6 +13,7 @@ on:
 
 permissions:
   contents: write # append the watch link to the release notes
+  id-token: write # publish as this repository, no Bisque account
 
 jobs:
   explain:
@@ -18,6 +21,4 @@ jobs:
     steps:
       - uses: bisque-cloud/presenter@v1
         with:
-          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-          bisque-api-key: ${{ secrets.BISQUE_API_KEY }}
-          bisque-user-id: ${{ secrets.BISQUE_USER_ID }}
+          claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
