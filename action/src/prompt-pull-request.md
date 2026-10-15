@@ -16,6 +16,7 @@ Source material, all in `source/`:
 - `source/pr.md` — title, body, author, merge date, labels, the changed files
 - `source/diff.patch` — the diff, capped in size
 - `source/comments.md` — review comments, if any
+- `source/design.md` — the repository's own design system, when it keeps one
 
 Tell the story the author told. Quote the pull request and the diff rather
 than inventing around them. Name files and functions when a viewer would need
@@ -50,6 +51,11 @@ read its design section before you write HTML, not after. The one thing it
 asks for that is easy to skip: let the composition change with what each
 slide is saying, so two slides in a row with the same skeleton means one of
 them was not designed.
+
+When `source/design.md` exists, it is how this project already looks: its
+colors, type, spacing and voice. Read it before you choose anything, and build
+the presentation in that system rather than inventing a look beside it. It
+decides the look only; the 21 px floor and the format contract still hold.
 
 ## What to write
 
