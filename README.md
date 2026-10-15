@@ -162,7 +162,7 @@ Claude plan. The explainer publishes to your repository's own channel,
 `bisque.today/p/{owner}/{repo}`, using the GitHub-signed identity of the
 workflow run, so there is no Bisque account to create. Whoever owns the
 repository can claim that channel by signing in with GitHub. Setup steps an
-agent can follow: [bisque.today/docs/github](https://bisque.today/docs/github).
+agent can follow: [bisque.today/docs/present/works-with/github-action](https://bisque.today/docs/present/works-with/github-action).
 
 Set one key or token. It names the provider, and the provider picks the
 model, so the shortest useful workflow chooses nothing:
@@ -275,7 +275,7 @@ alongside it.
 ## Docs
 
 - [present](https://bisque.today/docs/present) — what to ask for, how to change a presentation, what happens the first time
-- [video](https://bisque.today/docs/video) — rendering an MP4 from a watch URL
+- [video](https://bisque.today/docs/present/video) — rendering an MP4 from a watch URL
 - [API](https://bisque.today/docs/api) and [MCP](https://bisque.today/docs/mcp) — publishing from your own code or editor
 
 Something not working? [Open an issue](https://github.com/bisque-cloud/presenter/issues)
