@@ -76,9 +76,17 @@ If you have a shell, run these two commands from this directory once
    it reports none.
 2. `node {{PRESENT}} pronunciation-report --html out/index.html --voice {{VOICE}}`
    shows how the voice will say each word. Follow the skill's "Check
-   pronunciations before synthesizing" section: mark each word it would say
-   wrong, including short capitals like `US` or `API`, and run the report
-   again to confirm. The first run downloads the voice, about a minute.
+   pronunciations before synthesizing" section. Take every word with
+   `inLexicon: false` one at a time: sound out its `respelled` value letter
+   by letter, and ask whether a person would say it that way. A guessed
+   pronunciation is often wrong for a compound written as one word, a code
+   identifier, or a product name; `signup` respelled `SIHGNUHP` is "sig-nup",
+   not "sign-up". Judge short capitals like `US` or `API` the same way. Mark
+   each word the voice would say wrong and run the report again to confirm.
+   The first run downloads the voice, about a minute.
+
+   In your last message, list every `inLexicon: false` word with its
+   respelling and your verdict: right, or marked as what.
 
 If either command cannot run, say so in your last message.
 
