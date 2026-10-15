@@ -403,6 +403,272 @@ function escapedCueMarkers(rawNotes) {
   return found;
 }
 
+// ── Player-shell CSS: a port of packages/presentation-format/src/shell-css.ts,
+// which the server runs on every publish. Keep the two in step.
+
+/** Every <style> block's text, comments removed. */
+function styleBlocks(html) {
+  const css = [];
+  for (const m of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi)) {
+    css.push(m[1]);
+  }
+  return css.join("\n").replace(/\/\*[\s\S]*?(\*\/|$)/g, " ");
+}
+
+const CSS_GROUPING_AT_RULES = new Set([
+  "media",
+  "supports",
+  "container",
+  "layer",
+  "scope",
+  "document",
+  "-moz-document",
+]);
+const CSS_GENERATES_CONTENT =
+  /(?:^|[;{\s])content\s*:\s*(?!\s*(?:none|normal)\s*(?:!important\s*)?(?:;|$))/i;
+
+/** Selectors whose ::before/::after can land on the player's html or body. */
+export function shellStylingSelectors(css) {
+  const found = [];
+  for (const rule of cssStyleRules(css)) {
+    if (!CSS_GENERATES_CONTENT.test(rule.declarations)) continue;
+    for (const selector of cssSplitTopLevel(rule.prelude, ",")) {
+      const trimmed = selector.trim();
+      if (trimmed !== "" && cssDrawsOnShell(trimmed)) found.push(trimmed);
+    }
+  }
+  return found;
+}
+
+function cssStyleRules(css) {
+  const rules = [];
+  let start = 0;
+  let i = 0;
+  while (i < css.length) {
+    const ch = css[i];
+    if (ch === '"' || ch === "'") {
+      i = cssSkipString(css, i);
+      continue;
+    }
+    if (ch === ";" || ch === "}") {
+      start = ++i;
+      continue;
+    }
+    if (ch !== "{") {
+      i++;
+      continue;
+    }
+    const prelude = css.slice(start, i).trim();
+    if (prelude.startsWith("@")) {
+      const name = (/^@([-\w]+)/.exec(prelude)?.[1] ?? "").toLowerCase();
+      if (CSS_GROUPING_AT_RULES.has(name)) {
+        start = ++i;
+        continue;
+      }
+      i = cssSkipBlock(css, i);
+    } else {
+      const end = cssSkipBlock(css, i);
+      if (prelude !== "") {
+        rules.push({ prelude, declarations: css.slice(i + 1, end - 1) });
+      }
+      i = end;
+    }
+    start = i;
+  }
+  return rules;
+}
+
+function cssSkipString(text, open) {
+  const quote = text[open];
+  let i = open + 1;
+  while (i < text.length) {
+    if (text[i] === "\\") {
+      i += 2;
+      continue;
+    }
+    if (text[i] === quote || text[i] === "\n") return i + 1;
+    i++;
+  }
+  return i;
+}
+
+function cssSkipBlock(css, open) {
+  let depth = 0;
+  let i = open;
+  while (i < css.length) {
+    const ch = css[i];
+    if (ch === '"' || ch === "'") {
+      i = cssSkipString(css, i);
+      continue;
+    }
+    if (ch === "{") depth++;
+    if (ch === "}") {
+      depth--;
+      if (depth === 0) return i + 1;
+    }
+    i++;
+  }
+  return i;
+}
+
+function cssSplitTopLevel(text, sep) {
+  const parts = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"' || ch === "'") {
+      i = cssSkipString(text, i) - 1;
+      continue;
+    }
+    if (ch === "(" || ch === "[") depth++;
+    else if (ch === ")" || ch === "]") depth--;
+    else if (ch === sep && depth === 0) {
+      parts.push(text.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(text.slice(start));
+  return parts;
+}
+
+function cssCompounds(selector) {
+  const out = [];
+  let depth = 0;
+  let current = "";
+  let pending = "";
+  for (let i = 0; i < selector.length; i++) {
+    const ch = selector[i];
+    if (depth === 0 && (ch === ">" || ch === "+" || ch === "~")) {
+      if (current !== "") out.push({ combinator: pending, text: current });
+      current = "";
+      pending = ch;
+      continue;
+    }
+    if (depth === 0 && /\s/.test(ch)) {
+      if (current !== "") {
+        out.push({ combinator: pending, text: current });
+        current = "";
+        pending = " ";
+      }
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      const end = cssSkipString(selector, i);
+      current += selector.slice(i, end);
+      i = end - 1;
+      continue;
+    }
+    if (ch === "(" || ch === "[") depth++;
+    else if (ch === ")" || ch === "]") depth--;
+    current += ch;
+  }
+  if (current !== "") out.push({ combinator: pending, text: current });
+  if (out[0]) out[0].combinator = "";
+  return out;
+}
+
+function cssMatchingClose(text, open, opener, closer) {
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    if (text[i] === opener) depth++;
+    else if (text[i] === closer) {
+      depth--;
+      if (depth === 0) return i + 1;
+    }
+  }
+  return text.length;
+}
+
+function cssSkipIdent(text, from) {
+  let i = from;
+  while (i < text.length && /[-\w\\]/.test(text[i])) i++;
+  return i;
+}
+
+function cssParseCompound(text) {
+  const parts = {
+    type: null,
+    ids: 0,
+    classes: 0,
+    attributes: [],
+    pseudoClasses: [],
+    pseudoElement: null,
+  };
+  const head = /^(\*|[a-zA-Z][-\w]*)/.exec(text);
+  let i = 0;
+  if (head) {
+    parts.type = head[1].toLowerCase();
+    i = head[0].length;
+  }
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === "[") {
+      const name = /^\[\s*([-\w]+)/.exec(text.slice(i))?.[1] ?? "";
+      parts.attributes.push(name.toLowerCase());
+      i = cssMatchingClose(text, i, "[", "]");
+    } else if (ch === ":") {
+      const isElement = text[i + 1] === ":";
+      const nameStart = i + (isElement ? 2 : 1);
+      const name = (
+        /^[-\w]+/.exec(text.slice(nameStart))?.[0] ?? ""
+      ).toLowerCase();
+      let end = nameStart + name.length;
+      if (text[end] === "(") end = cssMatchingClose(text, end, "(", ")");
+      if (isElement || name === "before" || name === "after") {
+        parts.pseudoElement = name;
+      } else {
+        parts.pseudoClasses.push(name);
+      }
+      i = end;
+    } else if (ch === "#") {
+      parts.ids++;
+      i = cssSkipIdent(text, i + 1);
+    } else if (ch === ".") {
+      parts.classes++;
+      i = cssSkipIdent(text, i + 1);
+    } else {
+      i++;
+    }
+  }
+  return parts;
+}
+
+function cssCanBeRoot(parts) {
+  if (parts.ids > 0 || parts.classes > 0 || parts.attributes.length > 0) {
+    return false;
+  }
+  if (parts.type !== null && parts.type !== "*" && parts.type !== "html") {
+    return false;
+  }
+  return parts.pseudoClasses.every((p) => p === "root");
+}
+
+function cssDrawsOnShell(selector) {
+  const chain = cssCompounds(selector);
+  const subject = chain[chain.length - 1];
+  if (subject === undefined) return false;
+  const parts = cssParseCompound(subject.text);
+  if (parts.pseudoElement !== "before" && parts.pseudoElement !== "after") {
+    return false;
+  }
+  if (parts.ids > 0 || parts.classes > 0) return false;
+  if (!parts.attributes.every((a) => a === "data-layout")) return false;
+  if (
+    parts.type !== null &&
+    parts.type !== "*" &&
+    parts.type !== "html" &&
+    parts.type !== "body"
+  ) {
+    return false;
+  }
+  const onRoot = parts.type === "html" || parts.pseudoClasses.includes("root");
+  if (chain.length === 1) return true;
+  if (chain.length > 2 || onRoot) return false;
+  if (subject.combinator !== " " && subject.combinator !== ">") return false;
+  return cssCanBeRoot(cssParseCompound(chain[0].text));
+}
+
 /**
  * Everything an author can see before spending a minute of synthesis: a
  * pronunciation marker that did not parse (its leftover `](` is spoken and
@@ -420,6 +686,24 @@ export function lintPresentation(html) {
   extractSections(html).forEach((section, i) => {
     const id = sectionAttr(section, "id") ?? slideKeyFor(i);
     const where = `slide ${i + 1} (#${id})`;
+
+    // Mirrors validateDualLayout: the server refuses a section without both
+    // blocks, because a landscape-only slide clips on a phone.
+    const hasLandscape = section.includes('data-layout="landscape"');
+    const hasVertical = section.includes('data-layout="vertical"');
+    if (!hasLandscape || !hasVertical) {
+      const missing =
+        !hasLandscape && !hasVertical
+          ? "both [data-layout] blocks"
+          : hasLandscape
+            ? 'the [data-layout="vertical"] block'
+            : 'the [data-layout="landscape"] block';
+      problems.push(
+        `${where}: missing ${missing}. Every slide needs a 1920×1080 ` +
+          "landscape block and a 1080×1920 vertical one; a landscape-only " +
+          "slide clips on a phone.",
+      );
+    }
 
     for (const marker of escapedCueMarkers(rawNotesOf(section) ?? "")) {
       problems.push(
@@ -539,6 +823,15 @@ export function lintPresentation(html) {
       }
     }
   });
+  // Mirrors validateShellScopedCss: author CSS runs unscoped in the player,
+  // whose <body> carries data-layout too.
+  for (const selector of shellStylingSelectors(styleBlocks(html))) {
+    problems.push(
+      `a <style> rule draws a ::before/::after box on the player's own ` +
+        `<body>, over every slide and the controls: \`${selector}\`. ` +
+        "Scope it to the slide: `section > [data-layout]::before`.",
+    );
+  }
   return problems;
 }
 
@@ -2062,12 +2355,23 @@ async function cmdPublish(flags) {
   if (noVoice) fail(noVoice);
 
   const problems = lintPresentation(indexHtml);
-  if (problems.length > 0) {
+  // --best-effort is for a publish nobody can come back to fix, such as a CI
+  // job's last step: the problems are published as warnings, in the result
+  // and on stderr, instead of stopping the publish. The server is asked for
+  // the same. What leaves nothing to publish still fails.
+  const bestEffort = Boolean(flags["best-effort"]);
+  const contentWarnings = bestEffort ? problems : [];
+  if (problems.length > 0 && !bestEffort) {
     fail(
       `${problems.length} problem(s) in the presentation — nothing was synthesized:\n  ` +
         problems.join("\n  "),
     );
   }
+  for (const w of contentWarnings) say(`warning (published anyway): ${w}`);
+  const withWarnings = (extra = []) => {
+    const all = [...contentWarnings, ...extra];
+    return all.length > 0 ? { warnings: all } : {};
+  };
   const plan = narrationPlan(indexHtml);
   // A cloned voice is named by what is cloned on this machine. Name it now,
   // before the create below declares the voice, so the server can tell
@@ -2139,6 +2443,7 @@ async function cmdPublish(flags) {
     // Leaving it to a default on either side makes every slide stale on every
     // re-publish.
     speechSpeed: speed,
+    ...(bestEffort ? { bestEffort: true } : {}),
     ...(madeWith.length > 0 ? { madeWith } : {}),
     ...(flags.context
       ? {
@@ -2413,6 +2718,7 @@ async function cmdPublish(flags) {
               : {}),
             reused: creation.reused ?? [],
             live: { revision },
+            ...withWarnings(),
           },
           null,
           2,
@@ -2442,6 +2748,7 @@ async function cmdPublish(flags) {
           total: done.total,
           reused: creation.reused ?? [],
           ...(done.silentSlides ? { silentSlides: done.silentSlides } : {}),
+          ...withWarnings(),
         },
         null,
         2,
@@ -2577,6 +2884,7 @@ async function cmdPublish(flags) {
         reused: session.reused,
         staleSlides: session.staleSlides,
         complete: done?.status ?? "ok",
+        ...withWarnings(session.warnings ?? []),
       },
       null,
       2,
@@ -3205,7 +3513,7 @@ const USAGE = `usage:
                            [--made-with "Model Name"]
                            [--engine E] [--align A|none] [--speed 1.0] [--match-macos]
                            [--device auto|cpu|gpu] [--audio-dir audio] [--all]
-                           [--keep-open] [--profile NAME]
+                           [--keep-open] [--best-effort] [--profile NAME]
   node present.mjs resume  --presentation ID|WATCH_URL [--dir DIR] [--profile NAME]
   node present.mjs wait    --presentation ID --survey ID [--interval 3] [--timeout 0]
                            [--settle 15]
@@ -3239,6 +3547,11 @@ session: it writes the slides published so far into --dir and prints the
 answers so far; publish --keep-open from that directory continues it. It takes
 the presentation's id, or its watch URL when the first publish stopped before
 printing the id.
+
+--best-effort is for a publish nobody can come back to fix, such as a CI
+job's last step. The problems plan reports are published as warnings, in the
+result's "warnings" and on stderr, instead of stopping the publish. Leave it
+off wherever an author can still fix them.
 
 --org publishes into a company's library on bisque.team (members only by
 default); a repo can pin it with {"org": "<slug>"} in .bisque.json.

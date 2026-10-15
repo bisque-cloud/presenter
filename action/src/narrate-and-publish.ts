@@ -82,14 +82,26 @@ const args = [
   process.env.SLUG || "",
   "--visibility",
   visibility,
+  // This step is the last one; nobody is left to fix what the agent missed,
+  // so a content problem publishes as a warning rather than losing the run.
+  "--best-effort",
 ];
 if (existsSync(join(out, "context.md"))) args.push("--context", "context.md");
-const r = spawnSync("node", [presentMjs, ...args], {
-  cwd: out,
-  encoding: "utf8",
-  stdio: ["ignore", "pipe", "inherit"],
-  maxBuffer: 64 * 1024 * 1024,
-});
+// One retry: what is left to fail is the network or the server, and a
+// republish of the same slug carries forward what already landed.
+const publish = () =>
+  spawnSync("node", [presentMjs, ...args], {
+    cwd: out,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
+    maxBuffer: 64 * 1024 * 1024,
+  });
+let r = publish();
+if (r.status !== 0) {
+  warn(`publish exited with status ${r.status}; retrying once in 30 seconds`);
+  spawnSync("sleep", ["30"]);
+  r = publish();
+}
 if (r.status !== 0) fail(`publish exited with status ${r.status}`);
 let res;
 try {
