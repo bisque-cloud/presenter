@@ -161,8 +161,8 @@ That is the only secret. `claude setup-token` makes it, and it runs on your
 Claude plan. The explainer publishes to your repository's own channel,
 `bisque.today/p/{owner}/{repo}`, using the GitHub-signed identity of the
 workflow run, so there is no Bisque account to create. Whoever owns the
-repository can claim that channel by signing in with GitHub. Setup steps an
-agent can follow: [bisque.today/docs/present/works-with/github-action](https://bisque.today/docs/present/works-with/github-action).
+repository manages that channel by signing in with GitHub. Setup steps an
+agent can follow: [bisque.today/docs/github](https://bisque.today/docs/github).
 
 Set one key or token. It names the provider, and the provider picks the
 model, so the shortest useful workflow chooses nothing:

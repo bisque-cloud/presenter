@@ -82,27 +82,11 @@ inputs:
     required: false
     default: ""
 
-  bisque-api-key:
-    description: >-
-      Optional. Without it the explainer publishes to this repository's own
-      channel, bisque.today/p/{owner}/{repo}, using the GitHub-signed identity
-      of the workflow run (it needs `permissions: id-token: write`). The
-      repository's owner claims that channel by signing in with GitHub. With a
-      Bisque agent API key it publishes to that account instead; pair it with
-      bisque-user-id.
-    required: false
-    default: ""
-  bisque-user-id:
-    description: The Bisque user id that owns bisque-api-key.
-    required: false
-    default: ""
   voice:
     description: >-
-      A bisque-voice voice id, engine-qualified, like kokoro:af_heart. Narration
-      runs on this runner. Empty uses the voice saved for the channel, else the
-      account, on bisque.cloud, and kokoro:af_heart when neither saved one.
-      If bisque.cloud cannot be read, the run fails rather than guess a voice.
-      Whatever engine that names is downloaded on the first run and cached; a
+      The voice that narrates, engine-qualified, like kokoro:am_michael.
+      Empty narrates in kokoro:af_heart. Narration runs on this runner, and
+      whatever engine this names is downloaded on the first run and cached; a
       Studio voice (qwen3-*) is a multi-gigabyte download.
     required: false
     default: ""
@@ -154,7 +138,7 @@ runs:
 
     # Recorded before the agent runs. The publish step refuses a skill whose
     # hash no longer matches, so nothing the agent edited runs with the
-    # Bisque credential.
+    # repository's GitHub identity.
     - name: Snapshot the skill
       id: skill
       shell: bash
@@ -254,11 +238,9 @@ runs:
       id: publish
       shell: bash
       env:
-        BISQUE_API_KEY: ${{ inputs.bisque-api-key }}
-        BISQUE_USER_ID: ${{ inputs.bisque-user-id }}
-        # No Bisque key: publish as this repository, with the run's GitHub
-        # identity, to bisque.today/p/{owner}/{repo}.
-        BISQUE_GITHUB_OIDC: ${{ inputs.bisque-api-key == '' && '1' || '' }}
+        # Publish as this repository, with the run's GitHub identity, to
+        # bisque.today/p/{owner}/{repo}. No Bisque account or key.
+        BISQUE_GITHUB_OIDC: "1"
         GH_TOKEN: ${{ inputs.github-token }}
         REPO: ${{ github.repository }}
         ACTION_PATH: ${{ github.action_path }}
@@ -309,7 +291,6 @@ runs:
         TITLE: ${{ steps.source.outputs.title }}
         WATCH_URL: ${{ steps.publish.outputs.watch-url }}
         PRESENTATION_ID: ${{ steps.publish.outputs.presentation-id }}
-        # Whose storage the poster image is under: the account, or the
-        # repository channel's principal.
-        BISQUE_USER_ID: ${{ inputs.bisque-api-key != '' && inputs.bisque-user-id || format('github-repo-{0}', github.repository_id) }}
+        # Whose storage the poster image is under: the repository channel's.
+        BISQUE_USER_ID: github-repo-${{ github.repository_id }}
       run: node "${{ github.action_path }}/action/src/post-watch-link.ts"

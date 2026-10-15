@@ -1,6 +1,6 @@
 // Step: narrate on this runner with bisque-voice, then publish through the
-// present skill. This step is the only one that holds the Bisque credential,
-// and it runs a fresh copy of the skill whose hash it verifies first.
+// present skill. This step is the only one that can mint the run's GitHub
+// identity, and it runs a fresh copy of the skill whose hash it verifies first.
 import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -14,21 +14,17 @@ const out = join(work, "out");
 const actionPath = process.env.ACTION_PATH;
 let visibility = process.env.VISIBILITY || "";
 
-// Who publishes: a Bisque account's key, or, with none, this repository
-// itself through the run's GitHub OIDC identity. Checked before anything is
-// installed or narrated, so a missing permission costs seconds, not minutes.
-if (process.env.BISQUE_GITHUB_OIDC === "1") {
-  if (!process.env.ACTIONS_ID_TOKEN_REQUEST_URL) {
-    fail(
-      "No bisque-api-key, so this publishes as the repository, and that needs the workflow to grant `permissions: id-token: write`.",
-    );
-  }
-  console.log(
-    `publishing as ${process.env.REPO} to its own channel (GitHub OIDC, no Bisque account)`,
+// This repository publishes itself, through the run's GitHub OIDC identity.
+// Checked before anything is installed or narrated, so a missing permission
+// costs seconds, not minutes.
+if (!process.env.ACTIONS_ID_TOKEN_REQUEST_URL) {
+  fail(
+    "Publishing as this repository needs the workflow to grant `permissions: id-token: write`.",
   );
-} else if (!process.env.BISQUE_USER_ID) {
-  fail("bisque-api-key is set without bisque-user-id; pass both, or neither.");
 }
+console.log(
+  `publishing as ${process.env.REPO} to its own channel (GitHub OIDC, no Bisque account)`,
+);
 
 // The skill copy the agent could reach is not the one that runs here.
 run("node", [
