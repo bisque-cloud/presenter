@@ -144,6 +144,7 @@ runs:
         SOURCE: ${{ inputs.source }}
         TAG_INPUT: ${{ inputs.tag }}
         PR_INPUT: ${{ inputs.pull-request }}
+        VOICE: ${{ inputs.voice }}
         EVENT_PATH: ${{ github.event_path }}
         REPO: ${{ github.repository }}
         WORK: ${{ runner.temp }}/release-explainer
@@ -194,6 +195,26 @@ runs:
         CLAUDE_CODE_VERSION: ${{ inputs.claude-code-version }}
       run: npm install -g --no-fund --no-audit "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
 
+    # Before the agent, which downloads the voice the first time it checks
+    # pronunciations. Restore and save are split because the voice is not
+    # known until publish resolves it from the account, so the saved key is
+    # named after the models actually installed, not after an input that may
+    # be empty.
+    - name: Restore the speech models
+      id: models-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.bisque/models
+        key: bisque-voice-models-${{ runner.os }}-${{ runner.arch }}-v2
+        restore-keys: |
+          bisque-voice-models-${{ runner.os }}-${{ runner.arch }}-
+
+    # The agent runs the skill's own checks (plan, pronunciation-report)
+    # before it stops, and both need the engine. Publish reuses this binary.
+    - name: Install bisque-voice
+      shell: bash
+      run: node "${{ github.action_path }}/action/src/install-bisque-voice.ts"
+
     - name: Author with ${{ steps.proxy.outputs.model }}
       id: agent
       shell: bash
@@ -227,18 +248,6 @@ runs:
       env:
         WORK: ${{ runner.temp }}/release-explainer
       run: node "${{ github.action_path }}/action/src/check-presentation-structure.ts" "$WORK/out"
-
-    # Restore and save are split because the voice is not known until publish
-    # resolves it from the account, so the saved key is named after the models
-    # actually installed, not after an input that may be empty.
-    - name: Restore the speech models
-      id: models-cache
-      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: ~/.bisque/models
-        key: bisque-voice-models-${{ runner.os }}-${{ runner.arch }}-v2
-        restore-keys: |
-          bisque-voice-models-${{ runner.os }}-${{ runner.arch }}-
 
     - name: Narrate on this runner and publish
       id: publish

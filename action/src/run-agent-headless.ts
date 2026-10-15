@@ -58,6 +58,17 @@ if (network === "deny") {
  * settings and skills from $WORK only, never a self-hosted runner's own
  * ~/.claude, and HOME is a fresh directory for the same reason.
  */
+// The engine for the skill's checks, installed by the step before this one,
+// and the runner's real model directory, so a voice the check downloads is
+// the one publish narrates with and the cache saves. Claude Code runs with a
+// fresh HOME, which would otherwise hide both.
+const voiceEnv = {
+  BISQUE_VOICE_BIN:
+    process.env.BISQUE_VOICE ??
+    join(process.env.HOME ?? "", ".bisque", "bin", "bisque-voice"),
+  BISQUE_VOICE_MODEL_DIR: join(process.env.HOME ?? "", ".bisque", "models"),
+};
+
 function runClaudeCode(): number | null {
   const skills = join(work, ".claude", "skills");
   rmSync(skills, { recursive: true, force: true });
@@ -104,6 +115,7 @@ function runClaudeCode(): number | null {
       CLAUDE_CODE_OAUTH_TOKEN: "sk-ant-oat01-placeholder-held-by-key-proxy",
       DISABLE_AUTOUPDATER: "1",
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+      ...voiceEnv,
     },
     stdio: ["ignore", "inherit", "inherit"],
     maxBuffer: 256 * 1024 * 1024,
@@ -179,6 +191,7 @@ const r = spawnSync("opencode", args, {
     OPENCODE_CONFIG_CONTENT: JSON.stringify(config),
     OPENCODE_PERMISSION: JSON.stringify(permission),
     OPENCODE_DISABLE_EXTERNAL_SKILLS: "1",
+    ...voiceEnv,
   },
   stdio: ["ignore", "inherit", "inherit"],
   maxBuffer: 256 * 1024 * 1024,

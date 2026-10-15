@@ -21,20 +21,20 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fail, run } from "./action-step.ts";
 
-export const VERSION = "0.1.21";
+export const VERSION = "0.1.35";
 
 /** SHA-256 of each release tarball, from that version's latest.json. */
 export const CHECKSUMS: Record<string, string> = {
   "aarch64-apple-darwin":
-    "ad9b10b7c304f4f832c6722ceed541d49745b2faf4c5f6d6c16a790ec59cecf1",
+    "76779a55761b54f7c91b168d3b1eb6555d2be4269909961088a8de0b76def886",
   "x86_64-apple-darwin":
-    "b948a428065b5f04e425f70724b9adce57950e507de4eea616152a141cf451f7",
+    "1887ac9a09e75d8f83b807abb171375cd30fb042cfaa1f242845a16e654606f3",
   "x86_64-unknown-linux-gnu":
-    "3e84fdb01920c24caf4af3659197551131afd895a60db6ac778a99a709e44490",
+    "87a57b8ba3f26d396846cb26065b10cd8d38c75a069a46b68388781e38ddceed",
   "aarch64-unknown-linux-gnu":
-    "db8883bb76a1efc472f416c59bd90b9a76e9eef68a93855d6bffac8be89e5108",
+    "3fbddddd21ff6ff84132925a51d80cbb47fc737bae90df98a6969f1f89afe132",
   "x86_64-pc-windows-msvc":
-    "c7b6bea3d3d4438c0187d6dc636a7962af8242c3b305488b9f50990b290b4f17",
+    "8567fb33f44e719277889283fd32a66769486b0f2d561967aa6db8bdbb02b290",
 };
 
 /** The Rust target triple for a Node platform and architecture. */

@@ -20,6 +20,27 @@ mkdirSync(join(work, "out"), { recursive: true });
 const repo = process.env.REPO;
 const source = process.env.SOURCE || "release";
 const here = new URL(".", import.meta.url).pathname;
+
+// The skill script the agent runs its checks with, and the voice it checks
+// pronunciations for: the `voice` input, else the voice publish falls back to.
+const presentMjs = join(
+  here,
+  "..",
+  "..",
+  "skills",
+  "present",
+  "scripts",
+  "present.mjs",
+);
+const checkVoice = process.env.VOICE || "kokoro:af_heart";
+
+/** A prompt file with its placeholders filled in, as TASK.md. */
+function task(file: string, repo: string): string {
+  return readFileSync(join(here, file), "utf8")
+    .replaceAll("{{REPO}}", repo)
+    .replaceAll("{{PRESENT}}", presentMjs)
+    .replaceAll("{{VOICE}}", checkVoice);
+}
 const event = process.env.EVENT_PATH
   ? JSON.parse(readFileSync(process.env.EVENT_PATH, "utf8"))
   : {};
@@ -122,10 +143,7 @@ if (source === "release") {
 
   writeFileSync(
     join(work, "TASK.md"),
-    readFileSync(join(here, "prompt-release.md"), "utf8").replaceAll(
-      "{{REPO}}",
-      repo,
-    ),
+    task("prompt-release.md", repo),
   );
   output("title", name);
   output("slug", slugify(tag));
@@ -199,10 +217,7 @@ if (source === "release") {
 
   writeFileSync(
     join(work, "TASK.md"),
-    readFileSync(join(here, "prompt-pull-request.md"), "utf8").replaceAll(
-      "{{REPO}}",
-      repo,
-    ),
+    task("prompt-pull-request.md", repo),
   );
   output("title", pr.title);
   output("slug", `pr-${number}-${slugify(pr.title)}`);

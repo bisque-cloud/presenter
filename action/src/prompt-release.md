@@ -65,6 +65,23 @@ into `out/assets/` and reference them relatively, as the contract requires.
 Keep scratch files inside this directory rather than in `/tmp`. Do not run any code
 from the release. Do not write anywhere except `out/`.
 
+## Check before you stop
+
+If you have a shell, run these two commands from this directory once
+`out/index.html` is written, and fix what they report. Both only read.
+
+1. `node {{PRESENT}} plan --html out/index.html` prints what each slide will
+   say and every problem that would stop publishing, such as a step that
+   nothing in the narration reveals. Fix every problem and run it again until
+   it reports none.
+2. `node {{PRESENT}} pronunciation-report --html out/index.html --voice {{VOICE}}`
+   shows how the voice will say each word. Follow the skill's "Check
+   pronunciations before synthesizing" section: mark each word it would say
+   wrong, including short capitals like `US` or `API`, and run the report
+   again to confirm. The first run downloads the voice, about a minute.
+
+If either command cannot run, say so in your last message.
+
 When `out/index.html` passes the contract's own "Checklist before you finish",
 stop. Do not print the document to stdout. Do not publish anything; the job
 narrates and publishes after you.
