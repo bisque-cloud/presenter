@@ -187,7 +187,8 @@ The agent reads the release notes and the diff since the previous tag through
 the API, authors the presentation with the `present` skill from this same
 checkout, and stops. The action then narrates on the runner and publishes.
 Authoring is one model run on your key; narration, publishing and hosting are
-free. A private repository's explainer is unlisted unless you say otherwise.
+free. A private repository's explainer is private: people who can open the
+repository on GitHub watch it after signing in with GitHub.
 
 The agent never holds a credential. Its model calls go through a local proxy
 that holds your key or token and rewrites the auth header, so it is in no

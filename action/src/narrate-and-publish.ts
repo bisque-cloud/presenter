@@ -57,8 +57,9 @@ run(bv, ["--version"]);
 
 // Visibility: an explicit input wins. Otherwise a public repository's
 // explainer is public, like the release it explains, and a private
-// repository's is unlisted, so copying the example unchanged never puts
-// private notes and diffs on a public channel.
+// repository's is private: only people who can open the repository on
+// GitHub can watch it, after signing in with GitHub. Copying the example
+// unchanged never puts private notes and diffs on a public channel.
 if (!visibility) {
   const isPrivate = ghJson([
     "repo",
@@ -67,7 +68,7 @@ if (!visibility) {
     "--json",
     "isPrivate",
   ]).isPrivate;
-  visibility = isPrivate ? "unlisted" : "public";
+  visibility = isPrivate ? "private" : "public";
   console.log(`visibility: ${visibility} (from repository visibility)`);
 }
 

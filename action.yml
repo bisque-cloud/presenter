@@ -108,8 +108,9 @@ inputs:
     default: ""
   visibility:
     description: >-
-      public or unlisted. Empty means public for a public repository and
-      unlisted for a private one, so private notes never land on a public
+      public, unlisted or private. Empty means public for a public repository
+      and private for a private one, which only people who can open the
+      repository on GitHub can watch, so private notes never land on a public
       channel by default.
     required: false
     default: ""
