@@ -3,7 +3,7 @@
 You are running unattended inside a CI job. Nobody will answer a question.
 Work from the files in this directory and write your output into `out/`.
 
-## The job
+{{JUDGE}}## The job
 
 Make one presentation that explains the pull request in `source/`
 to an engineer who works on `{{REPO}}` but was not in the review. They want

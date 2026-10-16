@@ -12,6 +12,7 @@ import {
 import { fail, output, run, workDir } from "./action-step.ts";
 import { gh, ghJson } from "./github-cli.ts";
 import { previousRelease, slugify } from "./release-history.ts";
+import { resolveMode } from "./judgment.ts";
 
 const work = workDir();
 const src = join(work, "source");
@@ -21,6 +22,13 @@ mkdirSync(join(work, "out"), { recursive: true });
 const repo = process.env.REPO;
 const source = process.env.SOURCE || "release";
 const here = new URL(".", import.meta.url).pathname;
+
+// `when: judged` on an automatic pull request run puts the decision in front
+// of the task; every other run explains, as it always has.
+const resolved = resolveMode(process.env.WHEN, source, process.env.EVENT_NAME);
+if ("error" in resolved) fail(resolved.error);
+const mode = resolved.mode;
+output("mode", mode);
 
 // The skill script the agent runs its checks with, and the voice it checks
 // pronunciations for: the `voice` input, else the voice publish falls back to.
@@ -40,7 +48,13 @@ function task(file: string, repo: string): string {
   return readFileSync(join(here, file), "utf8")
     .replaceAll("{{REPO}}", repo)
     .replaceAll("{{PRESENT}}", presentMjs)
-    .replaceAll("{{VOICE}}", checkVoice);
+    .replaceAll("{{VOICE}}", checkVoice)
+    .replaceAll(
+      "{{JUDGE}}",
+      mode === "judged"
+        ? readFileSync(join(here, "prompt-pull-request-judge.md"), "utf8")
+        : "",
+    );
 }
 /**
  * The repository's own design system, when it keeps one at its root, as
@@ -249,7 +263,9 @@ if (source === "release") {
   output("slug", `pr-${number}-${slugify(pr.title)}`);
   output("tag", "");
   output("pr-number", number);
-  console.log(`Pull request: #${number} ${pr.title}`);
+  console.log(
+    `Pull request: #${number} ${pr.title}${mode === "judged" ? " (the model decides whether to explain it)" : ""}`,
+  );
 } else {
   fail(`source must be 'release' or 'pull-request', got '${source}'.`);
 }

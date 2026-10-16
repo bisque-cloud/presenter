@@ -81,6 +81,17 @@ inputs:
     description: Explain this pull request number instead of the one in the event. For manual runs.
     required: false
     default: ""
+  when:
+    description: >-
+      `always` (default) explains every pull request the workflow runs for.
+      `judged` has the model decide first whether the pull request is worth
+      explaining to someone who did not write it; when it is not, nothing is
+      published and the pull request gets one comment saying why. Applies
+      only to runs started by a `pull_request` or `pull_request_target`
+      event: a mention or a manual run always explains, because somebody
+      asked.
+    required: false
+    default: "always"
 
   voice:
     description: >-
@@ -110,6 +121,14 @@ outputs:
   presentation-id:
     description: The presentation id, for analytics and republishing.
     value: ${{ steps.publish.outputs.presentation-id }}
+  skipped:
+    description: >-
+      `true` when `when: judged` decided against an explainer. The run still
+      succeeds, and nothing is published.
+    value: ${{ steps.agent.outputs.skipped }}
+  skip-reason:
+    description: The one sentence the model gave for skipping, as posted on the pull request.
+    value: ${{ steps.agent.outputs.skip-reason }}
 
 runs:
   using: composite
@@ -129,6 +148,8 @@ runs:
         SOURCE: ${{ inputs.source }}
         TAG_INPUT: ${{ inputs.tag }}
         PR_INPUT: ${{ inputs.pull-request }}
+        WHEN: ${{ inputs.when }}
+        EVENT_NAME: ${{ github.event_name }}
         VOICE: ${{ inputs.voice }}
         EVENT_PATH: ${{ github.event_path }}
         REPO: ${{ github.repository }}
@@ -209,6 +230,7 @@ runs:
         BASE_PATH: ${{ steps.proxy.outputs.base-path }}
         NETWORK: ${{ inputs.network }}
         SOURCE: ${{ inputs.source }}
+        MODE: ${{ steps.source.outputs.mode }}
         PROXY_PORT: ${{ steps.proxy.outputs.port }}
         ACTION_PATH: ${{ github.action_path }}
         WORK: ${{ runner.temp }}/release-explainer
@@ -228,7 +250,10 @@ runs:
         WORK: ${{ runner.temp }}/release-explainer
       run: node "${{ github.action_path }}/action/src/key-proxy-lifecycle.ts" stop
 
+    # A skipped run (`when: judged`) wrote no presentation, so there is
+    # nothing to check or publish; the last step posts the reason instead.
     - name: Check the presentation
+      if: steps.agent.outputs.skipped != 'true'
       shell: bash
       env:
         WORK: ${{ runner.temp }}/release-explainer
@@ -236,6 +261,7 @@ runs:
 
     - name: Narrate on this runner and publish
       id: publish
+      if: steps.agent.outputs.skipped != 'true'
       shell: bash
       env:
         # Publish as this repository, with the run's GitHub identity, to
@@ -290,6 +316,8 @@ runs:
         PR_NUMBER: ${{ steps.source.outputs.pr-number }}
         TITLE: ${{ steps.source.outputs.title }}
         WATCH_URL: ${{ steps.publish.outputs.watch-url }}
+        SKIPPED: ${{ steps.agent.outputs.skipped }}
+        SKIP_REASON: ${{ steps.agent.outputs.skip-reason }}
         PRESENTATION_ID: ${{ steps.publish.outputs.presentation-id }}
         # Whose storage the poster image is under: the repository channel's.
         BISQUE_USER_ID: github-repo-${{ github.repository_id }}

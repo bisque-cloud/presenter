@@ -202,7 +202,11 @@ did not write, so on a repository that takes them from strangers, set
 `network: deny`: the agent then has no shell and no internet, which costs the
 fonts and images it would have downloaded.
 
-Both workflows are in [`examples/`](./examples), and every input is described
+Or let the model decide: run it on `pull_request` with `when: judged`, and it
+explains the pull requests worth explaining to someone who did not write them
+and leaves one comment saying why on the rest, such as a dependency bump.
+
+All three workflows are in [`examples/`](./examples), and every input is described
 in [`action.yml`](./action.yml).
 
 ## Install

@@ -1,0 +1,51 @@
+# Open a pull request and Claude Code decides whether it is worth explaining
+# to someone who did not write it. A design decision, a new command, a
+# migration or a change across packages gets a watchable walkthrough, linked
+# in a comment. A typo fix or a dependency bump gets one comment saying why
+# it was skipped, and nothing is published. A skipped run still passes.
+#
+# One secret: CLAUDE_CODE_OAUTH_TOKEN, from `claude setup-token`, which runs
+# on your Claude plan. (Or set one API key instead, see action.yml.) No
+# Bisque account: the explainer publishes to this repository's own channel,
+# bisque.today/p/{owner}/{repo}, with the run's GitHub identity, which is
+# what `id-token: write` grants.
+#
+# Pull requests from forks are left out. GitHub gives a `pull_request` run
+# from a fork no secrets and a read-only token, so it could neither write
+# nor publish. Dependabot's runs get the same treatment. To explain one of
+# those, add pull-request-explainer.yml beside this file and mention
+# @bisque-cloud on it: a comment runs in this repository, and a mention
+# always explains, even one this workflow skipped.
+name: Pull request explainer
+
+on:
+  pull_request:
+    # Not `synchronize`: every push would spend a Claude run, and the first
+    # explainer already covers what the pull request is for. Mention
+    # @bisque-cloud, or reopen it, to explain it again after big changes.
+    types: [opened, ready_for_review, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write # post the watch link, or why it was skipped
+  id-token: write # publish as this repository, no Bisque account
+
+# One run per pull request at a time, so opening and marking it ready in
+# quick succession cannot post two comments.
+concurrency:
+  group: explain-pull-request-${{ github.event.pull_request.number }}
+
+jobs:
+  explain:
+    # Drafts wait for ready_for_review; forks and Dependabot have no secrets.
+    if: >-
+      !github.event.pull_request.draft &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: bisque-cloud/presenter@v1
+        with:
+          source: pull-request
+          when: judged
+          claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

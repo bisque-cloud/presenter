@@ -2,9 +2,14 @@
 // notes, or a comment on the pull request. Rerunning replaces the previous
 // line or comment, so a second run for the same tag or pull request does
 // not add a second link.
+//
+// A pull request the model judged not worth explaining (`when: judged`) gets
+// one comment saying why instead, under the same marker, so a later run
+// edits it rather than adding another.
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { gh, ghJson } from "./github-cli.ts";
+import { planComment, skipComment } from "./judgment.ts";
 
 const MARKER = "<!-- release-explainer -->";
 const repo = process.env.REPO ?? "";
@@ -68,14 +73,23 @@ if (process.env.SOURCE === "release") {
   console.log(`Appended to release ${tag}: ${watchUrl}`);
 } else if (process.env.SOURCE === "pull-request") {
   const number = process.env.PR_NUMBER ?? "";
-  const body = `${MARKER}\n${line}`;
+  const skipped = process.env.SKIPPED === "true";
+  const body = skipped
+    ? `${MARKER}\n${skipComment(process.env.SKIP_REASON ?? "")}`
+    : `${MARKER}\n${line}`;
+  const what = skipped ? "skip" : watchUrl;
   const comments = ghJson<Array<{ id: number; body?: string }>>([
     "api",
     `repos/${repo}/issues/${number}/comments`,
     "--paginate",
   ]);
   const existing = comments.find((c) => (c.body ?? "").startsWith(MARKER));
-  if (existing) {
+  const plan = planComment(existing ? (existing.body ?? "") : null, skipped);
+  if (plan === "keep") {
+    console.log(
+      `Skipped #${number}, and left its existing explainer comment ${existing?.id} in place.`,
+    );
+  } else if (plan === "update" && existing) {
     gh([
       "api",
       "-X",
@@ -84,9 +98,9 @@ if (process.env.SOURCE === "release") {
       "-f",
       `body=${body}`,
     ]);
-    console.log(`Updated comment ${existing.id} on #${number}: ${watchUrl}`);
+    console.log(`Updated comment ${existing.id} on #${number}: ${what}`);
   } else {
     gh(["pr", "comment", number, "-R", repo, "--body", body]);
-    console.log(`Commented on #${number}: ${watchUrl}`);
+    console.log(`Commented on #${number}: ${what}`);
   }
 }
