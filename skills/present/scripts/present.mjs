@@ -2280,14 +2280,16 @@ function sha256File(file) {
 /**
  * `voiceId` is recorded in the manifest; it is not used to generate anything.
  * The endpoint only accepts a Kokoro-shaped id or a cloud-voice id, so a voice
- * from another engine is omitted rather than rejected.
+ * from another engine is omitted rather than rejected. `cloud:<id>` is how a
+ * server-narrated presentation names its voice, so republishing one keeps it.
  */
-function serverVoiceId(voice) {
+export function serverVoiceId(voice) {
   if (!voice) return undefined;
-  const m = /^(?:kokoro|local):(.+)$/i.exec(voice);
-  const bare = m ? m[1] : voice;
-  if (/^[a-z]{2}_[a-z0-9]+$/i.test(bare)) return `kokoro:${bare}`;
-  if (/^[A-Za-z0-9]{10,40}$/.test(bare)) return bare;
+  const kokoro = /^(?:kokoro|local):(.+)$/i.exec(voice);
+  const cloud = /^cloud:(.+)$/i.exec(voice);
+  const bare = kokoro ? kokoro[1] : cloud ? cloud[1] : voice;
+  if (!cloud && /^[a-z]{2}_[a-z0-9]+$/i.test(bare)) return `kokoro:${bare}`;
+  if (!kokoro && /^[A-Za-z0-9]{10,40}$/.test(bare)) return `cloud:${bare}`;
   return undefined;
 }
 
