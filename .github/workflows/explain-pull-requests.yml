@@ -1,0 +1,34 @@
+# This repository's own pull request explainer, set up as
+# https://bisque.today/docs/github.md describes. Claude Code reads each pull
+# request first and explains the ones someone who did not write it would want
+# walked through; the rest get one comment saying why they were skipped.
+#
+# Pull requests from forks are left out: GitHub gives those runs no secrets.
+# Mention @bisque-cloud on one instead (explain-on-mention.yml).
+name: Pull request explainer
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write # post the watch link, or why it was skipped
+  id-token: write # sign in with GitHub to publish
+
+concurrency:
+  group: explain-pull-request-${{ github.event.pull_request.number }}
+
+jobs:
+  explain:
+    if: >-
+      !github.event.pull_request.draft &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: bisque-cloud/presenter@v1
+        with:
+          source: pull-request
+          when: judged
+          claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

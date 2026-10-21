@@ -1,0 +1,52 @@
+# Mention @bisque-cloud in a comment on a pull request and it is explained,
+# whatever explain-pull-requests.yml decided. This covers pull requests from
+# forks. Only people with write access can start one.
+#
+# This repository takes pull requests from people we do not know, so the
+# agent runs with `network: deny`: no shell and no internet while it reads
+# their text.
+name: Pull request explainer on mention
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write # post the watch link as a comment
+  issues: write # react to the comment that mentions @bisque-cloud
+  id-token: write # sign in with GitHub to publish
+
+jobs:
+  explain:
+    if: >-
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '@bisque-cloud')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the mention and write access, and react so the commenter knows
+        id: mention
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          BODY: ${{ github.event.comment.body }}
+        run: |
+          if ! grep -Eiq '(^|[[:space:]])@bisque-cloud([[:space:].,!?;:]|$)' <<<"$BODY"; then
+            echo "No @bisque-cloud mention."; exit 0
+          fi
+          perm="$(gh api "repos/$REPO/collaborators/$ACTOR/permission" --jq .permission)"
+          case "$perm" in
+            write|maintain|admin) echo "$ACTOR: $perm" ;;
+            *) echo "::error::$ACTOR has '$perm' permission; @bisque-cloud needs write."; exit 1 ;;
+          esac
+          gh api --silent -X POST \
+            "repos/$REPO/issues/comments/$COMMENT_ID/reactions" -f content=eyes
+          echo "explain=true" >> "$GITHUB_OUTPUT"
+      - if: steps.mention.outputs.explain == 'true'
+        uses: bisque-cloud/presenter@v1
+        with:
+          source: pull-request
+          network: deny
+          claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
