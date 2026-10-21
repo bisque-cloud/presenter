@@ -197,8 +197,8 @@ GitHub identity is removed from the agent's step too; and the publishing step
 refuses to run a skill whose hash changed while the agent ran.
 
 The same step explains a pull request when a collaborator mentions
-`@bisque-cloud` in a comment on it, after a step checks they have write access. A pull request is text you
-did not write, so on a repository that takes them from strangers, set
+`@bisque-cloud` in a comment on it, after a step checks they have write
+access. A pull request is text you did not write, so on a repository that takes them from strangers, set
 `network: deny`: the agent then has no shell and no internet, which costs the
 fonts and images it would have downloaded.
 
