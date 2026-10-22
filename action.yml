@@ -278,12 +278,15 @@ runs:
         SLUG: ${{ steps.source.outputs.slug }}
       run: node "${{ github.action_path }}/action/src/narrate-and-publish.ts"
 
+    # A run that narrated nothing (a skipped pull request, or a failure before
+    # narration on a runner with no cached voice) has no models folder. That
+    # names no models, so nothing is saved, rather than failing the job.
     - name: Name the installed speech models
       id: models
       if: always()
       shell: bash
       run: |
-        key=$(cd ~/.bisque/models 2>/dev/null && ls -d */ 2>/dev/null | tr -d / | sort | paste -sd+ -)
+        key=$(cd ~/.bisque/models 2>/dev/null && ls -d */ 2>/dev/null | tr -d / | sort | paste -sd+ -) || key=""
         echo "key=$key" >> "$GITHUB_OUTPUT"
 
     - name: Save the speech models
