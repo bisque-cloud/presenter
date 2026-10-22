@@ -1,0 +1,38 @@
+# This repository's own release explainer, set up as
+# https://bisque.today/docs/github.md describes. Every published release gets
+# a narrated explainer on this repository's channel, and the watch link is
+# appended to the release notes.
+#
+# Run it by hand with an existing tag to explain a release that is already
+# out, or to try a change to this file without cutting a release.
+#
+# Releases here are published by maintainers and cover merged code, so the
+# agent keeps the network for fonts and images. The pull request mention
+# workflow denies it because that text can come from strangers.
+name: Release explainer
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: An existing release tag to explain, e.g. v1.5.1
+        required: true
+        type: string
+
+permissions:
+  contents: write # append the watch link to the release notes
+  id-token: write # sign in with GitHub to publish
+
+concurrency:
+  group: explain-release-${{ inputs.tag || github.event.release.tag_name }}
+
+jobs:
+  explain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: bisque-cloud/presenter@v1
+        with:
+          tag: ${{ inputs.tag }}
+          claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
