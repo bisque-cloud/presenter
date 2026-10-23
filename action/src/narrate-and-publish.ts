@@ -14,16 +14,22 @@ const out = join(work, "out");
 const actionPath = process.env.ACTION_PATH;
 let visibility = process.env.VISIBILITY || "";
 
-// This repository publishes itself, through the run's GitHub OIDC identity.
+// This repository publishes itself, through the run's GitHub OIDC identity,
+// unless Bisque credentials are in the environment, which the skill prefers.
 // Checked before anything is installed or narrated, so a missing permission
 // costs seconds, not minutes.
-if (!process.env.ACTIONS_ID_TOKEN_REQUEST_URL) {
+const withKey = Boolean(
+  process.env.BISQUE_API_KEY && process.env.BISQUE_USER_ID,
+);
+if (!withKey && !process.env.ACTIONS_ID_TOKEN_REQUEST_URL) {
   fail(
     "Publishing as this repository needs the workflow to grant `permissions: id-token: write`.",
   );
 }
 console.log(
-  `publishing as ${process.env.REPO} to its own channel (GitHub OIDC, no Bisque account)`,
+  withKey
+    ? `publishing ${process.env.REPO} with the Bisque key in the environment`
+    : `publishing as ${process.env.REPO} to its own channel (GitHub OIDC, no Bisque account)`,
 );
 
 // The skill copy the agent could reach is not the one that runs here.
