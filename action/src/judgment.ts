@@ -61,17 +61,23 @@ export function skipComment(reason: string): string {
   return `${SKIP_MARKER}\n**No explainer for this pull request.** ${cleanReason(reason)}`;
 }
 
+/** Marks a comment as the note a run with no provider key leaves. */
+export const SETUP_MARKER = "<!-- release-explainer: setup -->";
+
 /**
  * What to do with this action's earlier comment on the pull request. A watch
- * link always replaces whatever was there. A skip replaces an earlier skip
- * but never a watch link: an explainer someone already made, by mention or
- * by an earlier judgment, stays up.
+ * link always replaces whatever was there. A note (a skip, or a missing
+ * key) replaces an earlier note but never a watch link: an explainer
+ * someone already made, by mention or by an earlier judgment, stays up.
  */
 export function planComment(
   existingBody: string | null | undefined,
-  skipped: boolean,
+  note: boolean,
 ): "create" | "update" | "keep" {
   if (existingBody == null) return "create";
-  if (!skipped) return "update";
-  return existingBody.includes(SKIP_MARKER) ? "update" : "keep";
+  if (!note) return "update";
+  return existingBody.includes(SKIP_MARKER) ||
+    existingBody.includes(SETUP_MARKER)
+    ? "update"
+    : "keep";
 }

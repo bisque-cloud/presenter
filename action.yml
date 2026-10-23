@@ -171,10 +171,13 @@ runs:
     # The only step that holds the provider key. It hands the key to a local
     # proxy over stdin and exits, so the agent step below runs with no key in
     # its environment and none in any process environment it can read.
+    # On a pull request with no key, it passes and says so instead, and the
+    # steps that need a model are skipped: the last step posts the note.
     - name: Start the key proxy
       id: proxy
       shell: bash
       env:
+        SOURCE: ${{ inputs.source }}
         MODEL: ${{ inputs.model }}
         VARIANT: ${{ inputs.variant }}
         CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude-code-oauth-token }}
@@ -209,6 +212,7 @@ runs:
     # be empty.
     - name: Restore the speech models
       id: models-cache
+      if: steps.proxy.outputs.missing-key != 'true'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.bisque/models
@@ -219,11 +223,13 @@ runs:
     # The agent runs the skill's own checks (plan, pronunciation-report)
     # before it stops, and both need the engine. Publish reuses this binary.
     - name: Install bisque-voice
+      if: steps.proxy.outputs.missing-key != 'true'
       shell: bash
       run: node "${{ github.action_path }}/action/src/install-bisque-voice.ts"
 
     - name: Author with ${{ steps.proxy.outputs.model }}
       id: agent
+      if: steps.proxy.outputs.missing-key != 'true'
       shell: bash
       env:
         MODEL: ${{ steps.proxy.outputs.model }}
@@ -253,8 +259,9 @@ runs:
 
     # A skipped run (`when: judged`) wrote no presentation, so there is
     # nothing to check or publish; the last step posts the reason instead.
+    # Neither did a run with no key.
     - name: Check the presentation
-      if: steps.agent.outputs.skipped != 'true'
+      if: steps.agent.outputs.skipped != 'true' && steps.proxy.outputs.missing-key != 'true'
       shell: bash
       env:
         WORK: ${{ runner.temp }}/release-explainer
@@ -262,7 +269,7 @@ runs:
 
     - name: Narrate on this runner and publish
       id: publish
-      if: steps.agent.outputs.skipped != 'true'
+      if: steps.agent.outputs.skipped != 'true' && steps.proxy.outputs.missing-key != 'true'
       shell: bash
       env:
         # Publish as this repository, with the run's GitHub identity, to
@@ -322,6 +329,7 @@ runs:
         WATCH_URL: ${{ steps.publish.outputs.watch-url }}
         SKIPPED: ${{ steps.agent.outputs.skipped }}
         SKIP_REASON: ${{ steps.agent.outputs.skip-reason }}
+        MISSING_KEY: ${{ steps.proxy.outputs.missing-key }}
         PRESENTATION_ID: ${{ steps.publish.outputs.presentation-id }}
         # Whose storage the poster image is under: the repository channel's.
         BISQUE_USER_ID: github-repo-${{ github.repository_id }}

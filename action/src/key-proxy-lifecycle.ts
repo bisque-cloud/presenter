@@ -17,7 +17,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { fail, output, workDir } from "./action-step.ts";
+import { fail, output, warn, workDir } from "./action-step.ts";
 import { keysFromEnv, resolveRun, specFor } from "./model-provider.ts";
 
 const work = workDir();
@@ -34,6 +34,19 @@ async function start(): Promise<void> {
     process.env.MODEL ?? "",
     process.env.VARIANT ?? "",
   );
+  // On a pull request a missing key is a setup step the maintainer has not
+  // done yet, not a fault in the contributor's change. The run passes, the
+  // steps that need a model are skipped, and the last step posts a note on
+  // the pull request naming the secret.
+  if (
+    "error" in run &&
+    run.missingKey &&
+    process.env.SOURCE === "pull-request"
+  ) {
+    warn(run.error);
+    output("missing-key", "true");
+    return;
+  }
   if ("error" in run) fail(run.error);
   const { provider, model, variant, key } = run;
   const upstream = specFor(provider);

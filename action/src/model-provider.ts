@@ -159,13 +159,14 @@ export function resolveRun(
   keys: Partial<Record<Provider, string>>,
   model = "",
   variant = "",
-): Resolved | { error: string } {
+): Resolved | { error: string; missingKey?: true } {
   const supplied = PROVIDERS.filter(([p]) => (keys[p] ?? "").trim().length > 0);
   const inputs = PROVIDERS.map(([, s]) => s.input).join(", ");
 
   if (supplied.length === 0) {
     return {
       error: `Set one provider key: ${inputs}. The key decides which model authors the explainer.`,
+      missingKey: true,
     };
   }
 

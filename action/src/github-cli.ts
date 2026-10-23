@@ -31,6 +31,19 @@ export function gh(args: string[]): string {
   }
 }
 
+/** Run `gh` and return stdout, or null when it fails, for optional reads. */
+export function ghMaybe(args: string[]): string | null {
+  try {
+    return execFileSync("gh", args, {
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch {
+    return null;
+  }
+}
+
 /** Run `gh` and parse its JSON output. */
 export function ghJson<T = unknown>(args: string[]): T {
   const out = gh(args);
