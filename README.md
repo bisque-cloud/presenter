@@ -140,9 +140,9 @@ repository, how the link comes back, your repository's own channel, and setup
 on the Claude plan you already have.
 [Watch it →](https://bisque.today/p/siderakis/claude-code-pr-explainer-video-every-pull-request)
 
-<sub>Made on 2026-10-14, after the `@bisque-cloud` mention shipped. Since
-then a private repository's explainers are private rather than unlisted.
-Refreshed by hand; owner @siderakis.</sub>
+<sub>Made on 2026-10-14, after the `@bisque-cloud` mention shipped; its private
+access and every-pull-request lines revised on 2026-10-23. Refreshed by hand;
+owner @siderakis.</sub>
 
 <!-- end pr-explainer-walkthrough -->
 
