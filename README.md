@@ -12,6 +12,10 @@ Linux, and Windows. **`watch`** reads a published presentation — anyone's — 
 your agent can summarize it or answer questions about it. **`video`** turns any
 published presentation into an MP4 you can upload; it runs on macOS.
 
+It is also a GitHub Action: mention `@bisque-cloud` on a pull request and a
+watchable explainer of the change comes back as a reply. See
+[On every pull request](#on-every-pull-request-from-github-actions).
+
 ```sh
 npx skills add bisque-cloud/presenter
 ```
@@ -117,36 +121,40 @@ const { webUrl } = await bisque.presentations.waitUntilReady(
 It lives in [`sdk/`](./sdk); the API it wraps is described at
 [bisque.today/openapi.json](https://bisque.today/openapi.json).
 
-## On every release, from GitHub Actions
+## On every pull request, from GitHub Actions
 
-This repo is also a GitHub Action. Add one step to a workflow and every
-release you publish gets a narrated explainer, made by the model you already
-pay for, with the watch link appended to the release notes for the people
-deciding whether to upgrade.
+This repo is also a GitHub Action that explains your pull requests. Mention
+`@bisque-cloud` in a comment on a pull request, an 👀 appears, and a few
+minutes later a reply links a watchable explainer of the change, made by the
+model you already pay for. Or let it run on every pull request: Claude Code
+explains the ones worth explaining to someone who did not write them, and
+leaves one comment saying why on the rest, such as a dependency bump.
 
-<!-- release-explainer-walkthrough: to remove, delete from here to the end marker -->
+<!-- pr-explainer-walkthrough: to remove, delete from here to the end marker -->
 
-[![The first slide of a walkthrough of the Release Explainer action](https://bisque.today/poster/AlY6OT2Cd1YpfqlZ5jsfdWcae933/release-explainer-v1-93be8d/og-slide.png)](https://bisque.today/p/siderakis/release-explainer-v1)
+[![The first slide of a walkthrough of the pull request explainer](https://bisque.today/poster/AlY6OT2Cd1YpfqlZ5jsfdWcae933/claude-code-pr-explainer-video-every-pull-request-94480e/og-slide.png)](https://bisque.today/p/siderakis/claude-code-pr-explainer-video-every-pull-request)
 
-A four-minute walkthrough of this action: the workflow step and its three
-secrets, which model each provider key runs, what happens between a published
-release and the link in its notes, how your model key stays out of the
-agent's reach, `/explain` on pull requests, and what it costs.
-[Watch it →](https://bisque.today/p/siderakis/release-explainer-v1)
+A three-minute walkthrough: an explainer of a real pull request in
+anthropics/claude-code-action, an `@bisque-cloud` mention on a test
+repository, how the link comes back, your repository's own channel, and setup
+on the Claude plan you already have.
+[Watch it →](https://bisque.today/p/siderakis/claude-code-pr-explainer-video-every-pull-request)
 
-<sub>Reviewed against v1.0.0, commit 2976f45, on 2026-09-30. Refreshed by
-hand; owner @siderakis.</sub>
+<sub>Made on 2026-10-14, after the `@bisque-cloud` mention shipped. Since
+then a private repository's explainers are private rather than unlisted.
+Refreshed by hand; owner @siderakis.</sub>
 
-<!-- end release-explainer-walkthrough -->
+<!-- end pr-explainer-walkthrough -->
 
-The step itself:
+The step that explains every pull request worth it:
 
 ```yaml
 on:
-  release:
-    types: [published]
+  pull_request:
+    types: [opened, ready_for_review, reopened]
 permissions:
-  contents: write # append the watch link to the release notes
+  contents: read
+  pull-requests: write # post the watch link, or why it was skipped
   id-token: write # publish as this repository, no Bisque account
 jobs:
   explain:
@@ -154,6 +162,8 @@ jobs:
     steps:
       - uses: bisque-cloud/presenter@v1
         with:
+          source: pull-request
+          when: judged
           claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 ```
 
@@ -163,6 +173,10 @@ Claude plan. The explainer publishes to your repository's own channel,
 workflow run, so there is no Bisque account to create. Whoever owns the
 repository manages that channel by signing in with GitHub. Setup steps an
 agent can follow: [bisque.today/docs/present/works-with/github-action](https://bisque.today/docs/present/works-with/github-action).
+
+The same action explains a release too: run it on `release: published`, with
+`contents: write`, and the watch link is appended to the release notes for the
+people deciding whether to upgrade.
 
 Set one key or token. It names the provider, and the provider picks the
 model, so the shortest useful workflow chooses nothing:
@@ -176,15 +190,14 @@ model, so the shortest useful workflow chooses nothing:
 | `xai-api-key`             | `grok-4.6`                                       |
 
 Each is the strongest general model that provider offers rather than the
-cheapest, because the explainer is read by everyone deciding whether to
-upgrade. Add `model: anthropic/claude-sonnet-4-6` to spend less, or any other
+cheapest, because the explainer is read by everyone who did not write the change. Add `model: anthropic/claude-sonnet-4-6` to spend less, or any other
 id from [models.dev](https://models.dev) to use something else;
 [OpenCode](https://opencode.ai) runs it, so a new model needs no new release
 of this action. A Claude plan token runs in Claude Code instead, the only
 harness that token may be used in.
 
-The agent reads the release notes and the diff since the previous tag through
-the API, authors the presentation with the `present` skill from this same
+The agent reads the pull request, or a release's notes and the diff since the
+previous tag, through the API, authors the presentation with the `present` skill from this same
 checkout, and stops. The action then narrates on the runner and publishes.
 Authoring is one model run on your key; narration, publishing and hosting are
 free. A private repository's explainer is private: people who can open the
@@ -196,15 +209,11 @@ environment the agent or its tools can read; the means to mint the run's
 GitHub identity is removed from the agent's step too; and the publishing step
 refuses to run a skill whose hash changed while the agent ran.
 
-The same step explains a pull request when a collaborator mentions
-`@bisque-cloud` in a comment on it, after a step checks they have write access. A pull request is text you
-did not write, so on a repository that takes them from strangers, set
-`network: deny`: the agent then has no shell and no internet, which costs the
-fonts and images it would have downloaded.
-
-Or let the model decide: run it on `pull_request` with `when: judged`, and it
-explains the pull requests worth explaining to someone who did not write them
-and leaves one comment saying why on the rest, such as a dependency bump.
+A mention starts a run only for a collaborator with write access, and it
+always explains, even a pull request the automatic run skipped. A pull
+request is text you did not write, so on a repository that takes them from
+strangers, set `network: deny`: the agent then has no shell and no internet,
+which costs the fonts and images it would have downloaded.
 
 All three workflows are in [`examples/`](./examples), and every input is described
 in [`action.yml`](./action.yml).

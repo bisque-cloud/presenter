@@ -1,8 +1,9 @@
-name: Release Explainer
+name: Pull Request Explainer
 description: >-
-  Narrated explainer of every release, made by the model you already pay for
-  and posted where the release is read. Bring your own key or your Claude
-  plan; no Bisque account needed. Also explains pull requests.
+  A watchable explainer of your pull requests, made by the model you already
+  pay for and linked in a comment. Mention @bisque-cloud, or let it pick the
+  ones worth explaining. Bring your own key or your Claude plan; no Bisque
+  account needed. Also explains releases.
 author: Bisque
 branding:
   icon: play-circle

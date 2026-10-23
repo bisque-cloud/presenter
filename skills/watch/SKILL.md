@@ -47,10 +47,15 @@ public.
 
 The target can be given either way:
 
-| Form            | Example                                     |
-| --------------- | ------------------------------------------- |
-| `url=`          | `url=https://bisque.today/p/nick/q3-review` |
-| `handle=&slug=` | `handle=nick&slug=q3-review`                |
+| Form            | Example                                                    |
+| --------------- | ---------------------------------------------------------- |
+| `url=`          | `url=https://bisque.today/p/nick/q3-review`                |
+| `handle=&slug=` | `handle=nick&slug=q3-review`                               |
+| `url=`          | `url=https://bisque.today/p/bisque-cloud/presenter/v1-5-1` |
+
+The last row is a repository's channel: a link with three parts after `/p/`
+is `owner/repo/slug`, and the response gives its `handle` as `owner~repo`.
+Pass the link as it is.
 
 ## 2. What comes back
 
