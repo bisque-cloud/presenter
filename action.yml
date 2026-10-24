@@ -87,7 +87,7 @@ inputs:
       `always` (default) explains every pull request the workflow runs for.
       `judged` has the model decide first whether the pull request is worth
       explaining to someone who did not write it; when it is not, nothing is
-      published and the pull request gets one comment saying why. Applies
+      published or commented, and the reason is in the run's log. Applies
       only to runs started by a `pull_request` or `pull_request_target`
       event: a mention or a manual run always explains, because somebody
       asked.
@@ -128,7 +128,7 @@ outputs:
       succeeds, and nothing is published.
     value: ${{ steps.agent.outputs.skipped }}
   skip-reason:
-    description: The one sentence the model gave for skipping, as posted on the pull request.
+    description: The one sentence the model gave for skipping. It is not posted on the pull request.
     value: ${{ steps.agent.outputs.skip-reason }}
 
 runs:
@@ -258,8 +258,8 @@ runs:
       run: node "${{ github.action_path }}/action/src/key-proxy-lifecycle.ts" stop
 
     # A skipped run (`when: judged`) wrote no presentation, so there is
-    # nothing to check or publish; the last step posts the reason instead.
-    # Neither did a run with no key.
+    # nothing to check, publish or comment. Neither did a run with no key;
+    # the last step posts a setup note for it instead.
     - name: Check the presentation
       if: steps.agent.outputs.skipped != 'true' && steps.proxy.outputs.missing-key != 'true'
       shell: bash

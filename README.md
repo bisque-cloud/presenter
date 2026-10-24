@@ -128,7 +128,7 @@ This repo is also a GitHub Action that explains your pull requests. Mention
 minutes later a reply links a watchable explainer of the change, made by the
 model you already pay for. Or let it run on every pull request: Claude Code
 explains the ones worth explaining to someone who did not write them, and
-leaves one comment saying why on the rest, such as a dependency bump.
+leaves the rest, such as a dependency bump, without a comment.
 
 <!-- pr-explainer-walkthrough: to remove, delete from here to the end marker -->
 
@@ -154,7 +154,7 @@ on:
     types: [opened, ready_for_review, reopened]
 permissions:
   contents: read
-  pull-requests: write # post the watch link, or why it was skipped
+  pull-requests: write # post the watch link
   id-token: write # publish as this repository, no Bisque account
 jobs:
   explain:

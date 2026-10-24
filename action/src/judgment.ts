@@ -53,22 +53,20 @@ export function cleanReason(raw: string | null | undefined): string {
   return flat.length > 280 ? `${flat.slice(0, 279).trimEnd()}…` : flat;
 }
 
-/** Marks a comment as a skip, under the action's own comment marker. */
+/**
+ * Marks the skip comment older versions left. Skips are no longer posted, but
+ * one left by an earlier version is still a note that may be replaced.
+ */
 export const SKIP_MARKER = "<!-- release-explainer: skipped -->";
-
-/** The comment a skipped pull request gets, after the action's marker. */
-export function skipComment(reason: string): string {
-  return `${SKIP_MARKER}\n**No explainer for this pull request.** ${cleanReason(reason)}`;
-}
 
 /** Marks a comment as the note a run with no provider key leaves. */
 export const SETUP_MARKER = "<!-- release-explainer: setup -->";
 
 /**
  * What to do with this action's earlier comment on the pull request. A watch
- * link always replaces whatever was there. A note (a skip, or a missing
- * key) replaces an earlier note but never a watch link: an explainer
- * someone already made, by mention or by an earlier judgment, stays up.
+ * link always replaces whatever was there. A note (a missing key) replaces an
+ * earlier note but never a watch link: an explainer someone already made, by
+ * mention or by an earlier run, stays up.
  */
 export function planComment(
   existingBody: string | null | undefined,

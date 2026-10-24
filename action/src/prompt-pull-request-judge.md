@@ -13,8 +13,8 @@ it.
 
 If it is not worth explaining, write one sentence saying why to
 `out/skipped.txt`, for example "It only bumps lodash from 4.17.20 to
-4.17.21." The sentence is posted on the pull request as written, so address
-the people who read it there, and name the change. Then stop: write nothing
+4.17.21." The sentence goes in the run's log and its `skip-reason` output,
+not on the pull request, so name the change. Then stop: write nothing
 else, do not write `out/index.html`, and skip every section below.
 
 If it is worth explaining, do not write `out/skipped.txt`, and carry on.

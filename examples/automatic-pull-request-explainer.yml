@@ -1,8 +1,8 @@
 # Open a pull request and Claude Code decides whether it is worth explaining
 # to someone who did not write it. A design decision, a new command, a
 # migration or a change across packages gets a watchable walkthrough, linked
-# in a comment. A typo fix or a dependency bump gets one comment saying why
-# it was skipped, and nothing is published. A skipped run still passes.
+# in a comment. A typo fix or a dependency bump gets no comment, and nothing
+# is published. A skipped run still passes, with the reason in its log.
 #
 # One secret: CLAUDE_CODE_OAUTH_TOKEN, from `claude setup-token`, which runs
 # on your Claude plan. (Or set one API key instead, see action.yml.) No
@@ -27,7 +27,7 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write # post the watch link, or why it was skipped
+  pull-requests: write # post the watch link
   id-token: write # publish as this repository, no Bisque account
 
 # One run per pull request at a time, so opening and marking it ready in
