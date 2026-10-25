@@ -19,6 +19,7 @@ import {
 import { join } from "node:path";
 import { fail, output, warn, workDir } from "./action-step.ts";
 import { keysFromEnv, resolveRun, specFor } from "./model-provider.ts";
+import { eventsFile } from "./provider-refusal.ts";
 
 const work = workDir();
 mkdirSync(work, { recursive: true });
@@ -51,8 +52,13 @@ async function start(): Promise<void> {
   const { provider, model, variant, key } = run;
   const upstream = specFor(provider);
 
-  // The proxy's own environment carries no key: it arrives over stdin.
-  const env = { ...process.env };
+  // The proxy's own environment carries no key: it arrives over stdin. It
+  // records each upstream response's kind, so a run the provider refused
+  // can end green (see provider-refusal.ts).
+  const env = {
+    ...process.env,
+    KEY_PROXY_EVENTS: eventsFile(work),
+  };
   delete env.API_KEY;
   for (const p of [
     "CLAUDE_CODE_OAUTH_TOKEN",

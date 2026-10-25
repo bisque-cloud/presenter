@@ -130,6 +130,13 @@ outputs:
   skip-reason:
     description: The one sentence the model gave for skipping. It is not posted on the pull request.
     value: ${{ steps.agent.outputs.skip-reason }}
+  refused:
+    description: >-
+      On a pull request, `auth` when the provider refused the key (expired or
+      revoked) and `limit` when the plan or account was out of quota. The run
+      still succeeds, with a warning, and nothing is published. `auth` leaves
+      a note naming the secret; `limit` leaves no comment. Empty otherwise.
+    value: ${{ steps.agent.outputs.refused }}
 
 runs:
   using: composite
@@ -258,10 +265,11 @@ runs:
       run: node "${{ github.action_path }}/action/src/key-proxy-lifecycle.ts" stop
 
     # A skipped run (`when: judged`) wrote no presentation, so there is
-    # nothing to check, publish or comment. Neither did a run with no key;
-    # the last step posts a setup note for it instead.
+    # nothing to check, publish or comment. Neither did a run with no key, or
+    # one the provider refused; the last step decides what, if anything, to
+    # say on the pull request.
     - name: Check the presentation
-      if: steps.agent.outputs.skipped != 'true' && steps.proxy.outputs.missing-key != 'true'
+      if: steps.agent.outputs.skipped != 'true' && steps.agent.outputs.refused == '' && steps.proxy.outputs.missing-key != 'true'
       shell: bash
       env:
         WORK: ${{ runner.temp }}/release-explainer
@@ -269,7 +277,7 @@ runs:
 
     - name: Narrate on this runner and publish
       id: publish
-      if: steps.agent.outputs.skipped != 'true' && steps.proxy.outputs.missing-key != 'true'
+      if: steps.agent.outputs.skipped != 'true' && steps.agent.outputs.refused == '' && steps.proxy.outputs.missing-key != 'true'
       shell: bash
       env:
         # Publish as this repository, with the run's GitHub identity, to
@@ -330,6 +338,7 @@ runs:
         SKIPPED: ${{ steps.agent.outputs.skipped }}
         SKIP_REASON: ${{ steps.agent.outputs.skip-reason }}
         MISSING_KEY: ${{ steps.proxy.outputs.missing-key }}
+        REFUSED: ${{ steps.agent.outputs.refused }}
         PRESENTATION_ID: ${{ steps.publish.outputs.presentation-id }}
         # Whose storage the poster image is under: the repository channel's.
         BISQUE_USER_ID: github-repo-${{ github.repository_id }}

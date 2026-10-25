@@ -9,14 +9,19 @@
 // key then never appears in this process's environment block), or the name
 // of an environment variable (for tests). Prints the port it chose on
 // stdout, once, then serves until killed.
+//
+// With KEY_PROXY_EVENTS set, it appends one line per upstream response to
+// that file: the status and what kind of response it was (see
+// provider-refusal.ts). Never the body, which can quote the key.
 import {
   createServer,
   request as httpRequest,
   type IncomingHttpHeaders,
 } from "node:http";
 import { request as httpsRequest } from "node:https";
-import { readFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import { URL } from "node:url";
+import { classifyResponse } from "./provider-refusal.ts";
 
 const [upstream, headerName, keySource, prefix = ""] = process.argv.slice(2);
 let key = "";
@@ -37,6 +42,17 @@ if (!upstream || !headerName || !key) {
 }
 const up = new URL(upstream);
 const client = up.protocol === "https:" ? httpsRequest : httpRequest;
+const eventsPath = process.env.KEY_PROXY_EVENTS ?? "";
+
+/** Record one response. Losing a line costs a classification, never a run. */
+function record(status: number, body: string): void {
+  if (!eventsPath) return;
+  try {
+    appendFileSync(eventsPath, `${status} ${classifyResponse(status, body)}\n`);
+  } catch {
+    // the run's outcome is decided elsewhere
+  }
+}
 
 const server = createServer((req, res) => {
   const url = new URL(req.url ?? "/", "http://placeholder");
@@ -65,11 +81,28 @@ const server = createServer((req, res) => {
       headers,
     },
     (upRes) => {
-      res.writeHead(upRes.statusCode ?? 502, upRes.headers);
-      upRes.pipe(res);
+      const status = upRes.statusCode ?? 502;
+      res.writeHead(status, upRes.headers);
+      if (status < 400) {
+        record(status, "");
+        upRes.pipe(res);
+        return;
+      }
+      // An error body is small; keep its start to classify it, and pass
+      // every byte through unchanged.
+      let head = "";
+      upRes.on("data", (chunk: Buffer) => {
+        if (head.length < 8192) head += chunk.toString("utf8");
+        res.write(chunk);
+      });
+      upRes.on("end", () => {
+        record(status, head);
+        res.end();
+      });
     },
   );
   out.on("error", (err) => {
+    record(502, "");
     res.writeHead(502, { "content-type": "text/plain" });
     res.end("keyproxy: upstream error: " + err.message);
   });

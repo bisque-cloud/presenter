@@ -5,9 +5,10 @@
 //
 // A pull request the model judged not worth explaining (`when: judged`) gets
 // no comment: the reason stays in the run's log and its `skip-reason` output.
-// A pull request whose run had no provider key gets one comment naming the
-// secret to add, under the same marker, so a later run edits it rather than
-// adding another.
+// A pull request whose run had no provider key, or a key the provider
+// refused, gets one comment naming the secret to add, under the same marker,
+// so a later run edits it rather than adding another. One whose plan was out
+// of quota gets none: that clears on its own, and the run's log says so.
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { gh, ghJson, ghMaybe } from "./github-cli.ts";
@@ -24,6 +25,10 @@ const title = process.env.TITLE ?? "this release";
  * the first slide as a clickable poster, and the link in text underneath.
  * The poster is the presentation's Open Graph image, already rendered by the
  * publish step. Without the ids to build that URL, the link alone is used.
+ *
+ * Beside the link sits the view count, an image bisque.today renders on each
+ * fetch ("· 31 views"), so the comment keeps counting after this run has
+ * ended. It is blank until the first view.
  */
 export function watchBlock(
   user: string,
@@ -34,7 +39,8 @@ export function watchBlock(
   const link = `[Watch the explainer](${url})`;
   if (!id || !user) return `---\n\n${link}`;
   const poster = `https://bisque.today/poster/${user}/${id}/og-slide.png`;
-  return `---\n\n[![A narrated explainer of ${subject}](${poster})](${url})\n\n${link}`;
+  const views = `https://bisque.today/api/presentations/views-badge/${encodeURIComponent(id)}`;
+  return `---\n\n[![A narrated explainer of ${subject}](${poster})](${url})\n\n${link} [![Views](${views})](${url})`;
 }
 
 const line = watchBlock(
@@ -59,8 +65,8 @@ export function appendLine(
   return `${kept}\n\n${marker}\n\n${text}\n`;
 }
 
-/** The missing-key note, naming the secret this run's workflow passes. */
-function setupNote(): string {
+/** The missing- or refused-key note, naming the secret the workflow passes. */
+function setupNote(refused: boolean): string {
   const path = workflowPath(process.env.GITHUB_WORKFLOW_REF ?? "", repo);
   const sha = process.env.GITHUB_WORKFLOW_SHA ?? "";
   const workflow = path
@@ -76,6 +82,7 @@ function setupNote(): string {
     repo,
     server: process.env.GITHUB_SERVER_URL,
     runId: process.env.GITHUB_RUN_ID,
+    refused,
   });
 }
 
@@ -96,12 +103,15 @@ if (process.env.SOURCE === "release") {
   console.log(`Appended to release ${tag}: ${watchUrl}`);
 } else if (process.env.SOURCE === "pull-request") {
   const number = process.env.PR_NUMBER ?? "";
-  const missingKey = process.env.MISSING_KEY === "true";
+  const refused = process.env.REFUSED ?? "";
+  const missingKey = process.env.MISSING_KEY === "true" || refused === "auth";
   if (process.env.SKIPPED === "true" && !missingKey) {
     console.log(`Skipped #${number}; left no comment.`);
+  } else if (refused === "limit") {
+    console.log(`#${number}: the plan was out of quota; left no comment.`);
   } else {
     const body = missingKey
-      ? `${MARKER}\n${setupNote()}`
+      ? `${MARKER}\n${setupNote(refused === "auth")}`
       : `${MARKER}\n${line}`;
     const what = missingKey ? "setup note" : watchUrl;
     const comments = ghJson<Array<{ id: number; body?: string }>>([

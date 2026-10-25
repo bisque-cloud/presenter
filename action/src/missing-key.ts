@@ -51,18 +51,26 @@ export function workflowPath(ref: string, repo: string): string {
   return rest.split("@")[0];
 }
 
-/** The comment body, after the action's own marker. */
+/**
+ * The comment body, after the action's own marker. `refused` is a secret
+ * that is set but that the provider turned down (expired or revoked), which
+ * is the same fix with a different first sentence.
+ */
 export function setupComment(opts: {
   provider: Provider;
   secret: string;
   repo: string;
   server?: string;
   runId?: string;
+  refused?: boolean;
 }): string {
   const server = opts.server || "https://github.com";
   const settings = `${server}/${opts.repo}/settings/secrets/actions/new`;
   const rerun = opts.runId
     ? `[re-run this job](${server}/${opts.repo}/actions/runs/${opts.runId})`
     : "re-run this job";
-  return `${SETUP_MARKER}\n**No explainer yet: the \`${opts.secret}\` secret is not set.** A maintainer can ${MAKE[opts.provider]} as \`${opts.secret}\` under [Settings → Secrets and variables → Actions](${settings}), then ${rerun}.`;
+  const what = opts.refused
+    ? `the \`${opts.secret}\` secret was refused (expired or revoked)`
+    : `the \`${opts.secret}\` secret is not set`;
+  return `${SETUP_MARKER}\n**No explainer yet: ${what}.** A maintainer can ${MAKE[opts.provider]} as \`${opts.secret}\` under [Settings → Secrets and variables → Actions](${settings}), then ${rerun}.`;
 }

@@ -128,7 +128,8 @@ This repo is also a GitHub Action that explains your pull requests. Mention
 minutes later a reply links a watchable explainer of the change, made by the
 model you already pay for. Or let it run on every pull request: Claude Code
 explains the ones worth explaining to someone who did not write them, and
-leaves the rest, such as a dependency bump, without a comment.
+leaves the rest, such as a dependency bump, without a comment. A used-up
+plan or an expired token never fails a pull request's checks.
 
 <!-- pr-explainer-walkthrough: to remove, delete from here to the end marker -->
 

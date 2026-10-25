@@ -31,6 +31,7 @@ import { join } from "node:path";
 import { fail, output, warn, workDir } from "./action-step.ts";
 import { cleanReason, SKIP_FILE } from "./judgment.ts";
 import { providerOf } from "./model-provider.ts";
+import { refusalIn, refusalWarning } from "./provider-refusal.ts";
 
 const work = workDir();
 // Resolved by the proxy step, which is the only place the keys are read.
@@ -132,9 +133,27 @@ function runClaudeCode(): number | null {
   return r.status;
 }
 
+/**
+ * Stop the step over a failed agent. On a pull request, when the provider's
+ * last answer was a refused key or a spent quota, that is the maintainer's
+ * setup or plan and not the contributor's change: the step passes with one
+ * warning and `refused` set, and the later steps publish nothing. Anything
+ * else fails as before. Releases always fail, as a missing key does, because
+ * the person who sees that check is the maintainer who can fix it.
+ */
+function agentFailed(message: string): never {
+  const refusal =
+    process.env.SOURCE === "pull-request" ? refusalIn(work) : null;
+  if (!refusal) fail(message);
+  console.log(message);
+  warn(refusalWarning(refusal, model));
+  output("refused", refusal);
+  process.exit(0);
+}
+
 if (provider === "claude-code") {
   const status = runClaudeCode();
-  if (status !== 0) fail(`claude exited with status ${status}`);
+  if (status !== 0) agentFailed(`claude exited with status ${status}`);
   checkOutput();
   process.exit(0);
 }
@@ -205,7 +224,7 @@ const r = spawnSync("opencode", args, {
   maxBuffer: 256 * 1024 * 1024,
 });
 if (r.error) fail(`opencode: ${r.error.message}`);
-if (r.status !== 0) fail(`opencode exited with status ${r.status}`);
+if (r.status !== 0) agentFailed(`opencode exited with status ${r.status}`);
 
 checkOutput();
 
@@ -234,7 +253,7 @@ function checkOutput(): void {
     }
   }
   if (!wroteHtml) {
-    fail(
+    agentFailed(
       "The agent finished without writing out/index.html. See the log above for what it did instead.",
     );
   }
