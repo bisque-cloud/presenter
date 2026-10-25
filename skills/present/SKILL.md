@@ -210,6 +210,33 @@ check ran for that voice. Markers still work there, judged by ear.
 
 When you publish, list the words you marked, in one line.
 
+### Narrate before someone else publishes
+
+When you stop before `publish` and a later step publishes the folder (a CI
+job, inside anthropics/claude-code-action), narrate it yourself first, so the
+narration you judged is the narration that ships. It needs no account:
+
+```sh
+node present.mjs narrate --html index.html --voice <engine:voice>
+```
+
+Use the voice the task names, else `kokoro:af_heart`. bisque-cloud/presenter's
+`presentation:` input publishes in the voice and speed you narrated in; any
+other `publish` narrates again unless it names the same ones. It writes `audio/` beside `index.html` and prints, per
+slide, what the voice actually produced: `durationMs`, every word with its
+`start` and `end` in seconds, `pronunciationWarnings` the engine raised while
+speaking, and `exact` (`false` means the timings are estimates). Judge it:
+
+1. Any `pronunciationWarnings` entry is a word to fix with a marker, as above.
+2. A word whose time is out of line with its length — a short word held long,
+   a long name rushed — is one the voice stumbled on. Look it up in the
+   pronunciation report and mark it if it is wrong.
+3. A slide that runs much longer than what it shows needs shorter narration.
+
+Edit, then run `pronunciation-report` and `narrate` again; only the slides
+whose narration changed are synthesized again. Leave `audio/` in the folder:
+a `publish` of it in the same voice and speed uploads that audio as it is.
+
 ### Publishing into a company (bisque.team)
 
 If the user asks to publish for their team or company, add `--org <slug>`

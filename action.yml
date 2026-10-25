@@ -94,6 +94,22 @@ inputs:
     required: false
     default: "always"
 
+  presentation:
+    description: >-
+      Publish a presentation an earlier job already wrote, instead of writing
+      one: the folder holding its index.html and, optionally, context.md,
+      assets/ and the audio/ the skill's `narrate` wrote. For a workflow that
+      authors with anthropics/claude-code-action and the presenter plugin,
+      which cannot publish from inside Claude's session, so Claude writes,
+      checks and narrates there. No model runs and no key is needed; this
+      step publishes that narration in the voice and speed it was made in,
+      narrates only slides it lacks, and posts the link. Run it in its own
+      job, after the one that wrote the folder, so nothing the agent touched
+      runs with the publishing identity. A relative path is read from the
+      workspace.
+    required: false
+    default: ""
+
   voice:
     description: >-
       The voice that narrates, engine-qualified, like kokoro:am_michael.
@@ -180,8 +196,10 @@ runs:
     # its environment and none in any process environment it can read.
     # On a pull request with no key, it passes and says so instead, and the
     # steps that need a model are skipped: the last step posts the note.
+    # Publishing a `presentation` an earlier job wrote needs no model at all.
     - name: Start the key proxy
       id: proxy
+      if: inputs.presentation == ''
       shell: bash
       env:
         SOURCE: ${{ inputs.source }}
@@ -216,10 +234,11 @@ runs:
     # pronunciations. Restore and save are split because the voice is not
     # known until publish resolves it from the account, so the saved key is
     # named after the models actually installed, not after an input that may
-    # be empty.
+    # be empty. A `presentation` arrives narrated, so its publish needs no
+    # model unless the earlier job left slides without audio.
     - name: Restore the speech models
       id: models-cache
-      if: steps.proxy.outputs.missing-key != 'true'
+      if: inputs.presentation == '' && steps.proxy.outputs.missing-key != 'true'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.bisque/models
@@ -236,7 +255,7 @@ runs:
 
     - name: Author with ${{ steps.proxy.outputs.model }}
       id: agent
-      if: steps.proxy.outputs.missing-key != 'true'
+      if: inputs.presentation == '' && steps.proxy.outputs.missing-key != 'true'
       shell: bash
       env:
         MODEL: ${{ steps.proxy.outputs.model }}
@@ -264,12 +283,26 @@ runs:
         WORK: ${{ runner.temp }}/release-explainer
       run: node "${{ github.action_path }}/action/src/key-proxy-lifecycle.ts" stop
 
+    # Publish-only: the folder an earlier job wrote stands where the agent's
+    # output would, so the checks and the publish below treat it the same.
+    - name: Take the presentation an earlier job wrote
+      id: take
+      if: inputs.presentation != ''
+      shell: bash
+      env:
+        PRESENTATION: ${{ inputs.presentation }}
+        WORK: ${{ runner.temp }}/release-explainer
+      run: node "${{ github.action_path }}/action/src/take-presentation.ts"
+
     # A skipped run (`when: judged`) wrote no presentation, so there is
     # nothing to check, publish or comment. Neither did a run with no key, or
     # one the provider refused; the last step decides what, if anything, to
-    # say on the pull request.
+    # say on the pull request. A `presentation` was checked by the skill's
+    # `plan` and `narrate` in the job that wrote it, where a problem could
+    # still be fixed; this check is for this Action's own agent, whose prompt
+    # asks for more than the format does.
     - name: Check the presentation
-      if: steps.agent.outputs.skipped != 'true' && steps.agent.outputs.refused == '' && steps.proxy.outputs.missing-key != 'true'
+      if: inputs.presentation == '' && steps.agent.outputs.skipped != 'true' && steps.agent.outputs.refused == '' && steps.proxy.outputs.missing-key != 'true'
       shell: bash
       env:
         WORK: ${{ runner.temp }}/release-explainer
@@ -287,7 +320,10 @@ runs:
         REPO: ${{ github.repository }}
         ACTION_PATH: ${{ github.action_path }}
         EXPECTED_HASH: ${{ steps.skill.outputs.hash }}
-        VOICE: ${{ inputs.voice }}
+        # The voice input wins; else a `presentation` publishes in the voice
+        # and speed its narration was made in, so that audio ships as judged.
+        VOICE: ${{ inputs.voice || steps.take.outputs.voice }}
+        SPEED: ${{ inputs.voice == '' && steps.take.outputs.speed || '' }}
         VISIBILITY: ${{ inputs.visibility }}
         WORK: ${{ runner.temp }}/release-explainer
         TITLE: ${{ steps.source.outputs.title }}
@@ -318,7 +354,7 @@ runs:
       if: always()
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
-        name: release-explainer-${{ steps.proxy.outputs.provider }}
+        name: release-explainer-${{ steps.proxy.outputs.provider || 'publish-only' }}
         path: |
           ${{ runner.temp }}/release-explainer
           !${{ runner.temp }}/release-explainer/key-proxy.*

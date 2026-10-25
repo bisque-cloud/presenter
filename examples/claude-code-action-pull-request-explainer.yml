@@ -1,0 +1,90 @@
+# Explain each new pull request with the Claude Code you already run in
+# anthropics/claude-code-action, and get a watch link back as a comment.
+#
+# Two jobs, because Claude's session cannot publish: claude-code-action
+# removes the variables that mint the run's GitHub identity before Claude
+# starts. So Claude does everything up to publishing with the presenter
+# plugin, where it can still fix what the checks find: it writes the
+# explainer, checks it, narrates it on the runner and judges the narration.
+# A second job, on a fresh runner, only publishes that folder and its audio
+# to this repository's own channel, bisque.today/p/{owner}/{repo}, and
+# comments. Only that job holds `id-token: write`, the same split PyPI's
+# trusted publishing and GitHub Pages use between building and publishing.
+#
+# One secret: CLAUDE_CODE_OAUTH_TOKEN, from `claude setup-token`, which the
+# repository already has if it runs claude-code-action on a Claude plan. No
+# Bisque account.
+#
+# A pull request from a fork runs without secrets, so this explains pull
+# requests from branches in this repository.
+name: Pull request explainer
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, reopened]
+
+jobs:
+  write:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          plugin_marketplaces: https://github.com/bisque-cloud/presenter.git
+          plugins: presenter@bisque-cloud
+          # The skill downloads its speech engine, narrates and runs its own
+          # checks with node, so Claude needs a shell, file writes and the web.
+          claude_args: >-
+            --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch,Skill
+            --max-turns 150
+          prompt: |
+            Use the present skill to explain pull request
+            #${{ github.event.pull_request.number }} in ${{ github.repository }}
+            to a reviewer who did not write it. Read it with
+            `gh pr view ${{ github.event.pull_request.number }}` and
+            `gh pr diff ${{ github.event.pull_request.number }}`.
+
+            Nobody is here to answer questions, so decide yourself. Write
+            index.html and context.md in ${{ runner.temp }}/explainer. Run
+            every step of the skill up to, not including, `publish`: the
+            spec, the presentation, `plan`, then `pronunciation-report` and
+            `narrate`, both with `--voice kokoro:af_heart`. Judge the
+            narration `narrate` reports, fix what it and the other checks
+            find, and run them again until they are clean. Leave `audio/` in
+            the folder. Do not run `login` or `publish`; the next job
+            publishes the folder with the narration you judged.
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: explainer
+          path: ${{ runner.temp }}/explainer
+          if-no-files-found: error
+
+  publish:
+    needs: write
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # post the watch link
+      id-token: write # publish as this repository, no Bisque account
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: explainer
+          path: explainer
+
+      # Publishes in the voice the audio was narrated in, so nothing is
+      # narrated again and no speech model is downloaded.
+      - uses: bisque-cloud/presenter@v1
+        with:
+          source: pull-request
+          presentation: explainer

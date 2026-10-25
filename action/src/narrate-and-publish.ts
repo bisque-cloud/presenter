@@ -89,6 +89,9 @@ const args = [
   // so a content problem publishes as a warning rather than losing the run.
   "--best-effort",
 ];
+// The speed a `presentation`'s narration was made at; publish otherwise
+// narrates at its default and would not reuse audio made at another.
+if (process.env.SPEED) args.push("--speed", process.env.SPEED);
 if (existsSync(join(out, "context.md"))) args.push("--context", "context.md");
 // One retry: what is left to fail is the network or the server, and a
 // republish of the same slug carries forward what already landed.

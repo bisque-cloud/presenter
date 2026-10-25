@@ -216,7 +216,54 @@ request is text you did not write, so on a repository that takes them from
 strangers, set `network: deny`: the agent then has no shell and no internet,
 which costs the fonts and images it would have downloaded.
 
-All three workflows are in [`examples/`](./examples), and every input is described
+### Already running claude-code-action?
+
+Add the presenter plugin to the
+[`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action)
+step you have, and Claude writes, checks and narrates the explainer, so it can
+still fix whatever the checks find. It can't publish from there: that action
+removes the means to mint the run's GitHub identity from Claude's session, on
+purpose. So a second job publishes the folder Claude wrote, audio included,
+with `presentation:`. No model runs in that job, nothing is narrated again,
+and it is the only one that holds `id-token: write`:
+
+```yaml
+jobs:
+  write:
+    runs-on: ubuntu-latest
+    permissions: { contents: read, pull-requests: read }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          plugin_marketplaces: https://github.com/bisque-cloud/presenter.git
+          plugins: presenter@bisque-cloud
+          claude_args: --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch,Skill
+          prompt: |
+            Use the present skill to explain this pull request. Write it to
+            ${{ runner.temp }}/explainer and run every step up to, not
+            including, publish, ending with `narrate --voice kokoro:af_heart`.
+      - uses: actions/upload-artifact@v4
+        with: { name: explainer, path: "${{ runner.temp }}/explainer" }
+  publish:
+    needs: write
+    runs-on: ubuntu-latest
+    permissions: { contents: read, pull-requests: write, id-token: write }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: explainer, path: explainer }
+      - uses: bisque-cloud/presenter@v1
+        with:
+          source: pull-request
+          presentation: explainer
+```
+
+The full workflow, with the prompt it was tested with, is
+[`examples/claude-code-action-pull-request-explainer.yml`](./examples/claude-code-action-pull-request-explainer.yml).
+
+All four workflows are in [`examples/`](./examples), and every input is described
 in [`action.yml`](./action.yml).
 
 ## Install
