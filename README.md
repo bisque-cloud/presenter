@@ -1,19 +1,17 @@
 # presenter
 
-Bisque's open-source **Agent Skills**. Quickly turn a design doc, a pull
-request, a website, or anything your agent has in its context into a watchable
-presentation you can share on [bisque.today](https://bisque.today). **Free and
-unlimited** — nothing is billed per word.
+Your agents worked overnight, and you woke up with a bunch of PRs to review. With the present skill, your agent can create a presentation for each PR, so you can sit back and allow them to explain their work.
 
-The collection ships three skills. **`present`** is the main one: you describe a
-presentation, your agent authors it, your machine narrates it, and Bisque hosts
-it. It works in **Claude Code**, **Gemini CLI**, and **Codex CLI**, on macOS,
-Linux, and Windows. **`watch`** reads a published presentation — anyone's — so
-your agent can summarize it or answer questions about it. **`video`** turns any
-published presentation into an MP4 you can upload; it runs on macOS.
+It's not just for PRs though, let them explain your *release notes* to your users. Actually, they can explain anything and can be used for agent-to-human or human-to-agent-to-human communication. 
 
-It is also a GitHub Action: mention `@bisque-cloud` on a pull request and a
-watchable explainer of the change comes back as a reply. See
+It stacks on top of other skills like `/present /cso` which will **run the security audit from gbrain and then present the results**.
+
+Your presentations live on [bisque.cloud](https://bisque.cloud) and can easily be shared.
+
+When you use the default local narration it's **Free and unlimited** — nothing is billed per word.
+
+
+You can set up a GitHub Action to automatically create explainer videos for every PR in your repo. See
 [On every pull request](#on-every-pull-request-from-github-actions).
 
 ```sh
