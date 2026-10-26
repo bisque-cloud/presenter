@@ -54,7 +54,8 @@ jobs:
             `gh pr diff ${{ github.event.pull_request.number }}`.
 
             Nobody is here to answer questions, so decide yourself. Write
-            index.html and context.md in ${{ runner.temp }}/explainer. Run
+            index.html, context.md and title.txt, one line holding the title
+            slide's headline, in ${{ runner.temp }}/explainer. Run
             every step of the skill up to, not including, `publish`: the
             spec, the presentation, `plan`, then `pronunciation-report` and
             `narrate`, both with `--voice kokoro:af_heart`. Judge the

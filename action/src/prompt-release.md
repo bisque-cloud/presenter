@@ -65,6 +65,9 @@ decides the look only; the 21 px floor and the format contract still hold.
   URL, and the questions a viewer is likely to ask
 - `out/assets/` — every font and image you use, downloaded, referenced
   relatively from `index.html`
+- `out/title.txt` — one line: the headline on your title slide. It is the
+  title the presentation is listed under, so it says what changed for the
+  viewer, never the bare tag or release name.
 
 You have a shell and internet access: download every font and image you use
 into `out/assets/` and reference them relatively, as the contract requires.

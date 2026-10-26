@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { fail, output, run, warn, workDir } from "./action-step.ts";
 import { installBisqueVoice } from "./install-bisque-voice.ts";
 import { ghJson } from "./github-cli.ts";
+import { listingTitle } from "./listing-title.ts";
 import { voiceArgs } from "./voice-args.ts";
 
 const work = workDir();
@@ -74,13 +75,16 @@ if (!visibility) {
   console.log(`visibility: ${visibility} (from repository visibility)`);
 }
 
+const title = listingTitle(out, process.env.TITLE || "");
+console.log(`title: ${title}`);
+
 const args = [
   "publish",
   "--html",
   "index.html",
   ...voiceFlags,
   "--title",
-  process.env.TITLE || "",
+  title,
   "--slug",
   process.env.SLUG || "",
   "--visibility",
