@@ -273,7 +273,7 @@ export function narrationPlan(html) {
 /**
  * Replace every `[display](spoken)` override with the word a reader sees.
  *
- * Deliberately mirrors `parse_override` in apps/bisque-voice/src/pronounce.rs
+ * Deliberately mirrors `parse_override` in opensource/bisque-voice/src/pronounce.rs
  * and `parsePronunciation` in packages/presentation-format: anything that does
  * not parse cleanly stays literal, so prose holding a bracket is never eaten,
  * and a body of empty slashes is an unfinished override rather than a marker.
