@@ -7,7 +7,8 @@
 // fails the job rather than running.
 //
 // Bumping the engine is a two-line edit: VERSION, then the checksums, both
-// from https://download.bisque.today/bisque-voice/latest.json.
+// from that release's latest.json on
+// https://github.com/bisque-cloud/bisque-voice/releases.
 import { createHash } from "node:crypto";
 import {
   chmodSync,
@@ -21,20 +22,20 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fail, run } from "./action-step.ts";
 
-export const VERSION = "0.1.35";
+export const VERSION = "0.1.38";
 
 /** SHA-256 of each release tarball, from that version's latest.json. */
 export const CHECKSUMS: Record<string, string> = {
   "aarch64-apple-darwin":
-    "76779a55761b54f7c91b168d3b1eb6555d2be4269909961088a8de0b76def886",
+    "7660f7d79626f1c73e0f4b2dcb29302edab105695306af3da1948f5c02c9ef50",
   "x86_64-apple-darwin":
-    "1887ac9a09e75d8f83b807abb171375cd30fb042cfaa1f242845a16e654606f3",
+    "decc4fc6b40d851763591dfa0d9ee043d203dd4275b5f34df51f38be06dfcdad",
   "x86_64-unknown-linux-gnu":
-    "87a57b8ba3f26d396846cb26065b10cd8d38c75a069a46b68388781e38ddceed",
+    "ae2b53975fd26e9baee972d310d71954e1c059fceb940f9307b290da3160de8a",
   "aarch64-unknown-linux-gnu":
-    "3fbddddd21ff6ff84132925a51d80cbb47fc737bae90df98a6969f1f89afe132",
+    "75f367efaa419d1840bcfe6751b6955d4d9262a8d365f7d9b86e6cf70e28840d",
   "x86_64-pc-windows-msvc":
-    "8567fb33f44e719277889283fd32a66769486b0f2d561967aa6db8bdbb02b290",
+    "bbfec12bb2f0862ffd28677fc36fad93ee19d22b7951fd16db4aeb6f1be18515",
 };
 
 /** The Rust target triple for a Node platform and architecture. */
@@ -87,7 +88,7 @@ export function installBisqueVoice(home: string = homedir()): string {
       `No checksum recorded for ${triple}. Update CHECKSUMS in install-bisque-voice.ts.`,
     );
 
-  const url = `https://download.bisque.today/bisque-voice/v${VERSION}/bisque-voice-${triple}.tar.gz`;
+  const url = `https://github.com/bisque-cloud/bisque-voice/releases/download/v${VERSION}/bisque-voice-${triple}.tar.gz`;
   const staging = join(tmpdir(), `bisque-voice-${VERSION}-${triple}`);
   const tarball = `${staging}.tar.gz`;
   rmSync(staging, { recursive: true, force: true });
