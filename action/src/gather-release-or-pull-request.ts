@@ -10,8 +10,12 @@ import {
   type ChangedFile,
 } from "./select-diff.ts";
 import { fail, output, run, workDir } from "./action-step.ts";
-import { gh, ghJson } from "./github-cli.ts";
-import { previousRelease, slugify } from "./release-history.ts";
+import { gh, ghJson, ghMaybe } from "./github-cli.ts";
+import {
+  notesCompareBase,
+  previousRelease,
+  slugify,
+} from "./release-history.ts";
 import { resolveMode } from "./judgment.ts";
 
 const work = workDir();
@@ -127,7 +131,23 @@ if (source === "release") {
     "--jq",
     "[.[].tagName]",
   ]);
-  const prev = previousRelease(tags, tag);
+  // The notes' own range first; then releases, and git tags for a stable
+  // version tagged without a release page.
+  const prev =
+    notesCompareBase(rel.body || "", tag) ||
+    previousRelease(tags, tag, () =>
+      (
+        ghMaybe([
+          "api",
+          "--paginate",
+          `repos/${repo}/tags?per_page=100`,
+          "--jq",
+          ".[].name",
+        ]) ?? ""
+      )
+        .split("\n")
+        .filter(Boolean),
+    );
 
   writeFileSync(
     join(src, "release.md"),
