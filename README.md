@@ -53,7 +53,7 @@ is a living document, not a one-shot render.
 Everything you publish lands on your channel, with a thumbnail and a running
 time, and each one has a watch URL you can send to anyone:
 
-[![A channel page listing nine published presentations](https://storage.googleapis.com/download.bisque.today/presenter/readme/channel.png)](https://bisque.today/p/siderakis)
+[![A channel page listing 13 published presentations](https://storage.googleapis.com/download.bisque.today/presenter/readme/channel-v2.png)](https://bisque.today/p/siderakis)
 
 The people you send it to can watch in any browser, or in the
 [Bisque app for iPhone and iPad](https://apps.apple.com/app/id6787150959),
