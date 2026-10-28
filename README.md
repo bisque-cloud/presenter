@@ -171,7 +171,7 @@ Claude plan. The explainer publishes to your repository's own channel,
 `bisque.today/p/{owner}/{repo}`, using the GitHub-signed identity of the
 workflow run, so there is no Bisque account to create. Whoever owns the
 repository manages that channel by signing in with GitHub. Setup steps an
-agent can follow: [bisque.today/docs/present/works-with/github-action](https://bisque.today/docs/present/works-with/github-action).
+agent can follow: [bisque.today/docs/present/github-action](https://bisque.today/docs/present/github-action).
 
 The same action explains a release too: run it on `release: published`, with
 `contents: write`, and the watch link is appended to the release notes for the
