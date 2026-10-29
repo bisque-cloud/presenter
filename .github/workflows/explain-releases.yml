@@ -32,7 +32,7 @@ jobs:
   explain:
     runs-on: ubuntu-latest
     steps:
-      - uses: bisque-cloud/presenter@v1
+      - uses: bisque-cloud/presenter@7159a1bda766df3900465cdbcc532fc5a8de495f # v1.9.4
         with:
           tag: ${{ inputs.tag }}
           claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

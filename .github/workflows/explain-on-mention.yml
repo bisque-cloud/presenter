@@ -45,7 +45,7 @@ jobs:
             "repos/$REPO/issues/comments/$COMMENT_ID/reactions" -f content=eyes
           echo "explain=true" >> "$GITHUB_OUTPUT"
       - if: steps.mention.outputs.explain == 'true'
-        uses: bisque-cloud/presenter@v1
+        uses: bisque-cloud/presenter@7159a1bda766df3900465cdbcc532fc5a8de495f # v1.9.4
         with:
           source: pull-request
           network: deny
