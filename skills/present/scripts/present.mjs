@@ -2301,8 +2301,7 @@ function cmdNarrate(flags) {
   ensureAlignerInstalled(bin, flags);
   fs.mkdirSync(audioDir, { recursive: true });
   const slides = plan.map((slide) => {
-    const mp3 = path.join(audioDir, `${slide.slideKey}.mp3`);
-    const sidecar = path.join(audioDir, `${slide.slideKey}.json`);
+    const { mp3, sidecar } = audioFiles(audioDir, slide.slideKey);
     let made = readCached(sidecar, mp3, slide.text, flags, speed)?.result;
     if (made) {
       say(`${slide.slideKey}: reusing local audio`);
@@ -2313,7 +2312,8 @@ function cmdNarrate(flags) {
     return {
       slideIndex: slide.slideIndex,
       slideKey: slide.slideKey,
-      audio: path.relative(process.cwd(), mp3),
+      // mp3 is a real path, so it is made relative to the real cwd.
+      audio: path.relative(fs.realpathSync(process.cwd()), mp3),
       durationMs: made.durationMs,
       exact: made.exact,
       pronunciationWarnings: made.pronunciationWarnings ?? [],
@@ -2332,6 +2332,16 @@ function cmdNarrate(flags) {
       2,
     ) + "\n",
   );
+}
+
+/** Where a slide's narration and its sidecar live in `audioDir`. Each is
+ *  checked, since the engine and the sidecar write would follow a link the
+ *  folder already holds. */
+function audioFiles(audioDir, slideKey) {
+  return {
+    mp3: insideDir(audioDir, `${slideKey}.mp3`, "--audio-dir"),
+    sidecar: insideDir(audioDir, `${slideKey}.json`, "--audio-dir"),
+  };
 }
 
 /** The manifest's own audio path for a slide — mirrors `audio/<slideKey>.mp3`. */
@@ -2790,8 +2800,7 @@ async function cmdPublish(flags) {
     for (const slideKey of needed) {
       const slide = plan.find((s) => s.slideKey === slideKey);
       if (!slide) continue;
-      const mp3 = path.join(audioDir, `${slideKey}.mp3`);
-      const sidecar = path.join(audioDir, `${slideKey}.json`);
+      const { mp3, sidecar } = audioFiles(audioDir, slideKey);
       let made = readCached(sidecar, mp3, slide.text, flags, speed)?.result;
       if (made) {
         say(`${slideKey}: reusing local audio`);
@@ -2939,8 +2948,7 @@ async function cmdPublish(flags) {
     for (const slideKey of stale) {
       const slide = plan.find((s) => s.slideKey === slideKey);
       if (!slide) continue;
-      const mp3 = path.join(audioDir, `${slideKey}.mp3`);
-      const sidecar = path.join(audioDir, `${slideKey}.json`);
+      const { mp3, sidecar } = audioFiles(audioDir, slideKey);
       const cached = readCached(sidecar, mp3, slide.text, flags, speed);
       if (cached) {
         say(`${slideKey}: reusing local audio`);
@@ -2996,7 +3004,7 @@ async function cmdPublish(flags) {
     const res = await fetch(target.url, {
       method: target.method,
       headers: target.headers,
-      body: fs.readFileSync(local),
+      body: readInside(local),
     });
     if (!res.ok)
       fail(
@@ -3054,7 +3062,7 @@ function synthesizeSlide(bin, slide, mp3, sidecar, flags, speed) {
       `${slide.slideKey}: ${mp3} does not match the digest bisque-voice reported.`,
     );
   }
-  fs.writeFileSync(
+  writeInside(
     sidecar,
     JSON.stringify(
       { text: slide.text, voice: flags.voice ?? null, speed, result },
@@ -3079,15 +3087,20 @@ function readCached(sidecar, mp3, text, flags, speed) {
   }
 }
 
-/** A file the caller explicitly named. Missing is a mistake worth stopping for
- *  — publishing without the `context.md` someone asked for is silent. */
 /**
  * `p` resolved against `root`, or a failure when it lands outside `root`.
  * Links are followed first, so a `context.md` linked to /proc/self/environ is
  * outside too, and a path not made yet is checked through the folder it would
- * go in. Every file publish reads to upload, and every place a command
- * writes, goes through here: a CI job runs these commands with its own
- * credentials in the environment, on a folder an agent wrote.
+ * go in. A link whose target does not exist is refused, wherever it sits in
+ * the path: writing through one creates its target, which can be anywhere.
+ * Every file publish reads to upload, and every place a command writes, goes
+ * through here: a CI job runs these commands with its own credentials in the
+ * environment, on a folder an agent wrote.
+ *
+ * What comes back is the real path, with every link already resolved, so a
+ * link swapped in the folder after this check is never walked; read and
+ * write it with `readInside` and `writeInside`, which refuse a link at the
+ * file itself.
  */
 export function insideDir(root, p, flag) {
   const real = (x) => {
@@ -3097,10 +3110,21 @@ export function insideDir(root, p, flag) {
       return null;
     }
   };
+  const exists = (x) => {
+    try {
+      fs.lstatSync(x);
+      return true;
+    } catch {
+      return false;
+    }
+  };
   const abs = path.resolve(root, p);
   let probe = abs;
   const tail = [];
   while (real(probe) === null && path.dirname(probe) !== probe) {
+    if (exists(probe)) {
+      fail(`${flag} ${p} goes through a link to nothing; it has to be a file.`);
+    }
     tail.unshift(path.basename(probe));
     probe = path.dirname(probe);
   }
@@ -3110,12 +3134,46 @@ export function insideDir(root, p, flag) {
   if (rel === ".." || rel.startsWith(".." + path.sep) || path.isAbsolute(rel)) {
     fail(`${flag} ${p} is outside ${base}; it has to be inside it.`);
   }
-  return abs;
+  return resolved;
 }
 
+/** Opened without following a link at the file itself (Windows has no such
+ *  flag, and gets the plain open). */
+const NOFOLLOW = fs.constants.O_NOFOLLOW ?? 0;
+
+/** A path from `insideDir`, read. A link put there since the check fails. */
+export function readInside(p, encoding) {
+  const fd = fs.openSync(p, fs.constants.O_RDONLY | NOFOLLOW);
+  try {
+    return fs.readFileSync(fd, encoding);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** A path from `insideDir`, written. A link put there since the check fails
+ *  rather than writing wherever it points. */
+export function writeInside(p, data) {
+  const fd = fs.openSync(
+    p,
+    fs.constants.O_WRONLY |
+      fs.constants.O_CREAT |
+      fs.constants.O_TRUNC |
+      NOFOLLOW,
+    0o666,
+  );
+  try {
+    fs.writeFileSync(fd, data);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** A file the caller explicitly named. Missing is a mistake worth stopping for
+ *  — publishing without the `context.md` someone asked for is silent. */
 function readNamedFile(p, flag) {
   if (!fs.existsSync(p)) fail(`${flag} ${p} does not exist.`);
-  return fs.readFileSync(p, "utf8");
+  return readInside(p, "utf8");
 }
 
 /** `--description <file>`: plain text, URLs linked on the watch page. The
@@ -3681,7 +3739,7 @@ async function cmdSpec(flags) {
   const text = await response.text();
 
   if (out) {
-    fs.writeFileSync(out, text);
+    writeInside(out, text);
     say(
       `wrote ${out} (${text.length} chars)${auth?.apiKey ? ", authenticated" : ""}`,
     );
