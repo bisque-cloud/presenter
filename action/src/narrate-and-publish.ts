@@ -78,25 +78,24 @@ if (!visibility) {
 const title = listingTitle(out, process.env.TITLE || "");
 console.log(`title: ${title}`);
 
+// Values ride in their flag as --name=value. The title is written by an
+// agent that reads pull requests, and one beginning with `--` passed as its
+// own argument would be read as another flag.
 const args = [
   "publish",
-  "--html",
-  "index.html",
+  "--html=index.html",
   ...voiceFlags,
-  "--title",
-  title,
-  "--slug",
-  process.env.SLUG || "",
-  "--visibility",
-  visibility,
+  `--title=${title}`,
+  `--slug=${process.env.SLUG || ""}`,
+  `--visibility=${visibility}`,
   // This step is the last one; nobody is left to fix what the agent missed,
   // so a content problem publishes as a warning rather than losing the run.
   "--best-effort",
 ];
 // The speed a `presentation`'s narration was made at; publish otherwise
 // narrates at its default and would not reuse audio made at another.
-if (process.env.SPEED) args.push("--speed", process.env.SPEED);
-if (existsSync(join(out, "context.md"))) args.push("--context", "context.md");
+if (process.env.SPEED) args.push(`--speed=${process.env.SPEED}`);
+if (existsSync(join(out, "context.md"))) args.push("--context=context.md");
 // One retry: what is left to fail is the network or the server, and a
 // republish of the same slug carries forward what already landed.
 const publish = () =>

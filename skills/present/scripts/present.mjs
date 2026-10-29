@@ -2290,9 +2290,10 @@ function cmdNarrate(flags) {
         problems.join("\n  "),
     );
   }
-  const audioDir = path.resolve(
+  const audioDir = insideDir(
     path.dirname(htmlPath),
     flags["audio-dir"] ?? "audio",
+    "--audio-dir",
   );
   const plan = narrationPlan(html);
   const bin = requireTts();
@@ -2406,7 +2407,11 @@ async function cmdPublish(flags) {
   // Resolved from the presentation's own directory, so a repo that pins an
   // account in `.bisque.json` publishes to that account.
   const auth = requireAuth(flags, workDir);
-  const audioDir = path.resolve(workDir, flags["audio-dir"] ?? "audio");
+  const audioDir = insideDir(
+    workDir,
+    flags["audio-dir"] ?? "audio",
+    "--audio-dir",
+  );
   // The live presentation this directory last published or resumed, if it is
   // the one being appended to: its revision goes with the append, and its
   // narration speed is the default, so the slides already narrated keep
@@ -2569,7 +2574,7 @@ async function cmdPublish(flags) {
     ...(flags.context
       ? {
           contextMd: readNamedFile(
-            path.resolve(workDir, flags.context),
+            insideDir(workDir, flags.context, "--context"),
             "--context",
           ),
         }
@@ -2577,7 +2582,7 @@ async function cmdPublish(flags) {
     ...(flags.design
       ? {
           designMd: readNamedFile(
-            path.resolve(workDir, flags.design),
+            insideDir(workDir, flags.design, "--design"),
             "--design",
           ),
         }
@@ -2716,7 +2721,7 @@ async function cmdPublish(flags) {
     }
 
     for (const target of creation.assetUploads ?? []) {
-      const local = path.resolve(workDir, target.path);
+      const local = insideDir(workDir, target.path, "upload");
       if (!fs.existsSync(local)) {
         fail(`create asked for ${target.path} but ${local} does not exist.`);
       }
@@ -2977,9 +2982,13 @@ async function cmdPublish(flags) {
     // Two kinds of upload come back from one session. An asset keeps its
     // bundle-relative path, so it resolves against the presentation directory;
     // audio is addressed by slide key and may live in a relocated --audio-dir.
-    const local = target.path.startsWith("assets/")
-      ? path.resolve(workDir, target.path)
-      : path.join(audioDir, `${path.basename(target.path, ".mp3")}.mp3`);
+    const local = insideDir(
+      workDir,
+      target.path.startsWith("assets/")
+        ? target.path
+        : path.join(audioDir, `${path.basename(target.path, ".mp3")}.mp3`),
+      "upload",
+    );
     if (!fs.existsSync(local)) {
       fail(`publish asked for ${target.path} but ${local} does not exist.`);
     }
@@ -3072,6 +3081,38 @@ function readCached(sidecar, mp3, text, flags, speed) {
 
 /** A file the caller explicitly named. Missing is a mistake worth stopping for
  *  — publishing without the `context.md` someone asked for is silent. */
+/**
+ * `p` resolved against `root`, or a failure when it lands outside `root`.
+ * Links are followed first, so a `context.md` linked to /proc/self/environ is
+ * outside too, and a path not made yet is checked through the folder it would
+ * go in. Every file publish reads to upload, and every place a command
+ * writes, goes through here: a CI job runs these commands with its own
+ * credentials in the environment, on a folder an agent wrote.
+ */
+export function insideDir(root, p, flag) {
+  const real = (x) => {
+    try {
+      return fs.realpathSync(x);
+    } catch {
+      return null;
+    }
+  };
+  const abs = path.resolve(root, p);
+  let probe = abs;
+  const tail = [];
+  while (real(probe) === null && path.dirname(probe) !== probe) {
+    tail.unshift(path.basename(probe));
+    probe = path.dirname(probe);
+  }
+  const resolved = path.join(real(probe) ?? probe, ...tail);
+  const base = real(root) ?? path.resolve(root);
+  const rel = path.relative(base, resolved);
+  if (rel === ".." || rel.startsWith(".." + path.sep) || path.isAbsolute(rel)) {
+    fail(`${flag} ${p} is outside ${base}; it has to be inside it.`);
+  }
+  return abs;
+}
+
 function readNamedFile(p, flag) {
   if (!fs.existsSync(p)) fail(`${flag} ${p} does not exist.`);
   return fs.readFileSync(p, "utf8");
@@ -3083,7 +3124,10 @@ function readDescription(workDir, value) {
   if (typeof value !== "string" || !value) {
     fail("--description needs a file: --description description.txt");
   }
-  const text = readNamedFile(path.resolve(workDir, value), "--description");
+  const text = readNamedFile(
+    insideDir(workDir, value, "--description"),
+    "--description",
+  );
   if (text.trim().length > 5000) {
     fail(
       `--description ${value} is ${text.trim().length} characters; the limit is 5,000.`,
@@ -3514,7 +3558,23 @@ function buildMadeWith(flagValue, voiceId) {
   return out;
 }
 
-function parseFlags(argv) {
+/** The flags that are switches; every other flag takes a value. */
+const BOOLEAN_FLAGS = new Set([
+  "all",
+  "best-effort",
+  "keep-open",
+  "match-macos",
+  "no-smoke",
+]);
+
+/**
+ * A flag that takes a value never turns its value into another flag. A
+ * title written by an agent can begin with `--`, and `--title
+ * --context=/proc/self/environ` read as two flags once made a publish upload
+ * the process's environment as its context. Like Node's `util.parseArgs`,
+ * such a value is refused as ambiguous; `--title=--whatever` passes it.
+ */
+export function parseFlags(argv) {
   const flags = {};
   const rest = [];
   for (let i = 0; i < argv.length; i += 1) {
@@ -3530,6 +3590,12 @@ function parseFlags(argv) {
     }
     const name = arg.slice(2);
     const next = argv[i + 1];
+    if (next?.startsWith("--") && !BOOLEAN_FLAGS.has(name)) {
+      fail(
+        `--${name} needs a value, and the next argument (${next.slice(0, 40)}) ` +
+          `is read as a flag. A value that starts with a dash is passed as --${name}=VALUE.`,
+      );
+    }
     if (next === undefined || next.startsWith("--")) {
       flags[name] = true;
     } else {
@@ -3562,6 +3628,10 @@ function parseFlags(argv) {
  */
 async function cmdSpec(flags) {
   const part = typeof flags.part === "string" ? flags.part : "core";
+  const out =
+    typeof flags.out === "string"
+      ? insideDir(process.cwd(), flags.out, "--out")
+      : null;
   const auth = resolveAuth({
     profile: typeof flags.profile === "string" ? flags.profile : undefined,
     cwd: process.cwd(),
@@ -3610,7 +3680,6 @@ async function cmdSpec(flags) {
   }
   const text = await response.text();
 
-  const out = typeof flags.out === "string" ? flags.out : null;
   if (out) {
     fs.writeFileSync(out, text);
     say(
