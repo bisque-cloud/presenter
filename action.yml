@@ -101,9 +101,11 @@ inputs:
       assets/ and the audio/ the skill's `narrate` wrote. For a workflow that
       authors with anthropics/claude-code-action and the presenter plugin,
       which cannot publish from inside Claude's session, so Claude writes,
-      checks and narrates there. No model runs and no key is needed; this
-      step publishes that narration in the voice and speed it was made in,
-      narrates only slides it lacks, and posts the link. Run it in its own
+      checks and narrates there. No model runs, no key is needed and no
+      speech engine is installed; this step publishes that narration in the
+      voice and speed it was made in and posts the link. A narrated slide
+      without its audio fails the run, naming the slide, rather than being
+      narrated here where nobody hears it first. Run it in its own
       job, after the one that wrote the folder, so nothing the agent touched
       runs with the publishing identity. A relative path is read from the
       workspace.
@@ -235,7 +237,7 @@ runs:
     # known until publish resolves it from the account, so the saved key is
     # named after the models actually installed, not after an input that may
     # be empty. A `presentation` arrives narrated, so its publish needs no
-    # model unless the earlier job left slides without audio.
+    # model.
     - name: Restore the speech models
       id: models-cache
       if: inputs.presentation == '' && steps.proxy.outputs.missing-key != 'true'
@@ -248,8 +250,9 @@ runs:
 
     # The agent runs the skill's own checks (plan, pronunciation-report)
     # before it stops, and both need the engine. Publish reuses this binary.
+    # A `presentation` arrives narrated, so its publish installs no engine.
     - name: Install bisque-voice
-      if: steps.proxy.outputs.missing-key != 'true'
+      if: inputs.presentation == '' && steps.proxy.outputs.missing-key != 'true'
       shell: bash
       run: node "${{ github.action_path }}/action/src/install-bisque-voice.ts"
 
@@ -324,6 +327,7 @@ runs:
         # and speed its narration was made in, so that audio ships as judged.
         VOICE: ${{ inputs.voice || steps.take.outputs.voice }}
         SPEED: ${{ inputs.voice == '' && steps.take.outputs.speed || '' }}
+        PUBLISH_ONLY: ${{ inputs.presentation != '' }}
         VISIBILITY: ${{ inputs.visibility }}
         WORK: ${{ runner.temp }}/release-explainer
         TITLE: ${{ steps.source.outputs.title }}

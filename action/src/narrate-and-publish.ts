@@ -54,9 +54,14 @@ try {
 // install-bisque-voice.ts. The speech model is not installed here: publish
 // resolves the voice (the input, else the channel's or account's saved one,
 // else the fallback) and installs whichever engine that names, once, into the
-// cached ~/.bisque/models.
-const bv = installBisqueVoice();
-run(bv, ["--version"]);
+// cached ~/.bisque/models. Publishing a `presentation` an earlier job
+// narrated uploads that audio and narrates nothing, so it downloads no engine,
+// and a slide without its audio fails the publish instead.
+const publishOnly = process.env.PUBLISH_ONLY === "true";
+if (!publishOnly) {
+  const bv = installBisqueVoice();
+  run(bv, ["--version"]);
+}
 
 // Visibility: an explicit input wins. Otherwise a public repository's
 // explainer is public, like the release it explains, and a private
@@ -91,6 +96,7 @@ const args = [
   // This step is the last one; nobody is left to fix what the agent missed,
   // so a content problem publishes as a warning rather than losing the run.
   "--best-effort",
+  ...(publishOnly ? ["--require-audio"] : []),
 ];
 // The speed a `presentation`'s narration was made at; publish otherwise
 // narrates at its default and would not reuse audio made at another.

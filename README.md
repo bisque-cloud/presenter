@@ -261,7 +261,14 @@ jobs:
 The full workflow, with the prompt it was tested with, is
 [`examples/claude-code-action-pull-request-explainer.yml`](./examples/claude-code-action-pull-request-explainer.yml).
 
-All four workflows are in [`examples/`](./examples), and every input is described
+To keep the agent further from publishing, on a dedicated, capped Anthropic
+API key instead of a Claude plan token,
+[`examples/split-explainer-api-key.yml`](./examples/split-explainer-api-key.yml)
+explains merged pull requests from the merged commit and minor and major
+releases, with Claude in a read-only job, publishing jobs that hold no secret,
+and every action and the plugin pinned to a commit.
+
+All five workflows are in [`examples/`](./examples), and every input is described
 in [`action.yml`](./action.yml).
 
 ## Install

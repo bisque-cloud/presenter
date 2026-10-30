@@ -4,7 +4,8 @@
 // which removes the means to mint the run's GitHub identity from Claude's
 // session, so the agent there cannot publish. Claude narrates there with the
 // skill's `narrate`, and this step names the voice and speed that audio was
-// made in, so the publish uploads it instead of narrating again.
+// made in, so the publish uploads it as it is. A folder without that
+// narration fails here: this job never narrates.
 import {
   cpSync,
   existsSync,
@@ -14,7 +15,7 @@ import {
   rmSync,
 } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
-import { fail, output, warn, workDir } from "./action-step.ts";
+import { fail, output, workDir } from "./action-step.ts";
 
 /**
  * The folder to publish, or the reason it cannot be. A relative path is read
@@ -88,8 +89,8 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
     output("voice", narrated.voice);
     output("speed", String(narrated.speed));
   } else {
-    warn(
-      "the earlier job left no narration in one voice (audio/), so this job narrates. Have it run the skill's `narrate` before uploading the folder.",
+    fail(
+      "the earlier job left no narration in one voice (audio/), and this job publishes only the narration it is given. Have that job run the skill's `narrate` after its last edit and upload audio/ with the folder.",
     );
   }
 }

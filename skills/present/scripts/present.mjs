@@ -2509,6 +2509,25 @@ async function cmdPublish(flags) {
       speed,
     );
   };
+  // --require-audio publishes only narration already on disk, for a CI job
+  // that publishes a folder an earlier job narrated: a slide with no audio
+  // for its exact text, voice and speed fails the run, named, before
+  // anything is created, instead of being narrated here unheard.
+  if (flags["require-audio"]) {
+    const missing = plan
+      .filter((s) => !localAudio(s.slideKey))
+      .map((s) => s.slideKey);
+    if (missing.length > 0) {
+      fail(
+        `--require-audio: ${missing.length} narrated slide(s) have no audio in ` +
+          `${path.relative(workDir, audioDir) || "."}/ for their current text, ` +
+          `voice ${flags.voice ?? "(default)"} and speed ${speed}: ` +
+          `${missing.join(", ")}. Run \`narrate\` with the same --voice and ` +
+          `--speed after the last edit, and keep audio/ in the folder.`,
+      );
+    }
+    say(`--require-audio: all ${plan.length} narrated slide(s) have audio`);
+  }
   // A cloned voice is named by what is cloned on this machine. Name it now,
   // before the create below declares the voice, so the server can tell
   // whether the audio it holds was spoken in it.
@@ -3623,6 +3642,7 @@ const BOOLEAN_FLAGS = new Set([
   "keep-open",
   "match-macos",
   "no-smoke",
+  "require-audio",
 ]);
 
 /**
@@ -3769,7 +3789,8 @@ const USAGE = `usage:
                            [--made-with "Model Name"]
                            [--engine E] [--align A|none] [--speed 1.0] [--match-macos]
                            [--device auto|cpu|gpu] [--audio-dir audio] [--all]
-                           [--keep-open] [--best-effort] [--profile NAME]
+                           [--keep-open] [--best-effort] [--require-audio]
+                           [--profile NAME]
   node present.mjs resume  --presentation ID|WATCH_URL [--dir DIR] [--profile NAME]
   node present.mjs wait    --presentation ID --survey ID [--interval 3] [--timeout 0]
                            [--settle 15]
@@ -3812,6 +3833,11 @@ printing the id.
 job's last step. The problems plan reports are published as warnings, in the
 result's "warnings" and on stderr, instead of stopping the publish. Leave it
 off wherever an author can still fix them.
+
+--require-audio publishes only the narration already in audio/ and narrates
+nothing. Any narrated slide without audio for its current text, voice and
+speed stops the publish before anything is created, naming the slides. For a
+CI job that publishes a folder an earlier job narrated.
 
 --org publishes into a company's library on bisque.team (members only by
 default); a repo can pin it with {"org": "<slug>"} in .bisque.json.

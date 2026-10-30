@@ -1,0 +1,173 @@
+# Explain each merged pull request and each minor or major release, with a
+# dedicated Anthropic API key, so that a prompt-injected run can at worst
+# produce a bad video.
+#
+# Claude writes the explainer in a job that can only read the repository: it
+# holds `contents: read`, the API key and nothing else. Separate jobs with no
+# secrets publish the folder it uploads to this repository's own channel,
+# bisque.today/p/{owner}/{repo}, and post the link. Only they hold
+# `id-token: write`, and each holds just the one write permission it needs.
+#
+# Claude reads the merged commit or the release, never the pull request's
+# title, body or comments. A direct push to main with no pull request, a patch
+# release and a prerelease get no video.
+#
+# One secret: ANTHROPIC_API_KEY. Give it its own key with a spending cap: it
+# sits in the environment of a session with a shell and the network, so a
+# prompt-injected run could spend up to that cap. No Bisque account.
+#
+# Every action is pinned to a full commit SHA, and the presenter plugin is
+# checked out at the same commit as the publishing Action. Update them
+# together. anthropics/claude-code-action does not run on `push` or `release`
+# events, so the writing job uses its base-action, the same Claude Code runner
+# without the event handling. It is safe here because the working directory is
+# a merged commit on main or a release tag, and the prompt holds only a number,
+# a commit SHA or a tag.
+name: Video explainers
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+
+permissions: {}
+
+jobs:
+  # What to explain, if anything: the pull request this push merged, or a
+  # minor or major release.
+  subject:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read # find the pull request a push merged
+    outputs:
+      pr: ${{ steps.find.outputs.pr }}
+      tag: ${{ steps.find.outputs.tag }}
+      task: ${{ steps.find.outputs.task }}
+    steps:
+      - id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+          TAG: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = release ]; then
+            if [ "$PRERELEASE" = false ] && [[ "$TAG" == *.0 ]]; then
+              echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+              echo "task=release $TAG. Read its notes with \`gh release view $TAG\` and what changed since the previous release with \`git log\` and \`git diff\`" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            pr=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" \
+              --jq "[.[] | select(.merge_commit_sha == \"$GITHUB_SHA\")][0].number // empty")
+            if [ -n "$pr" ]; then
+              echo "pr=$pr" >> "$GITHUB_OUTPUT"
+              echo "task=the change merged to main as commit $GITHUB_SHA. Read it with \`git diff $BEFORE $GITHUB_SHA\` and the files it touches" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+  write:
+    needs: subject
+    if: needs.subject.outputs.task != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # read the merged commit or the release
+    outputs:
+      written: ${{ steps.check.outputs.written }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The plugin, at the same commit as the publishing Action below.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: bisque-cloud/presenter
+          ref: 7159a1bda766df3900465cdbcc532fc5a8de495f # v1.9.4
+          path: .presenter
+          persist-credentials: false
+
+      # The speech engine, from that commit's pinned, checksummed installer.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - run: node .presenter/action/src/install-bisque-voice.ts
+
+      - uses: anthropics/claude-code-action/base-action@6d5ae526d25ce88daa2200be073e1a373167f064 # v1.0.265
+        env:
+          GH_TOKEN: ${{ github.token }} # read-only, for `gh release view`
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          plugin_marketplaces: ./.presenter
+          plugins: presenter@bisque-cloud
+          claude_args: >-
+            --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch,Skill
+            --max-turns 150
+          prompt: |
+            Use the present skill to explain ${{ needs.subject.outputs.task }}.
+            Explain it to someone who uses ${{ github.repository }} and did
+            not write the change: what changes for them, and why.
+
+            If it is not worth a video (a dependency bump, formatting, a typo,
+            a small fix), write nothing and stop. Otherwise write index.html,
+            context.md and title.txt, one line holding the title slide's
+            headline, in ${{ runner.temp }}/explainer. Nobody is here to
+            answer questions, so decide yourself. Run every step of the skill
+            up to, not including, `publish`: the spec, the presentation,
+            `plan`, then `pronunciation-report` and `narrate`, both with
+            `--voice kokoro:af_heart`. Judge the narration `narrate` reports,
+            fix what it and the other checks find, and run them again until
+            they are clean. Leave `audio/` in the folder. Do not run `login`
+            or `publish`; the next job publishes the folder.
+
+      - id: check
+        run: |
+          if [ -f "$RUNNER_TEMP/explainer/index.html" ]; then
+            echo "written=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.check.outputs.written == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: explainer
+          path: ${{ runner.temp }}/explainer
+
+  # Publishes what Claude wrote, with no secret and no model, in the voice it
+  # was narrated in, and comments the link on the pull request.
+  publish-pull-request:
+    needs: [subject, write]
+    if: needs.write.outputs.written == 'true' && needs.subject.outputs.pr != ''
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # publish as this repository, no Bisque account
+      pull-requests: write # comment the watch link
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: explainer
+          path: explainer
+      - uses: bisque-cloud/presenter@7159a1bda766df3900465cdbcc532fc5a8de495f # v1.9.4
+        with:
+          source: pull-request
+          pull-request: ${{ needs.subject.outputs.pr }}
+          presentation: explainer
+
+  # The same, adding the link to the release notes.
+  publish-release:
+    needs: [subject, write]
+    if: needs.write.outputs.written == 'true' && needs.subject.outputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # publish as this repository, no Bisque account
+      contents: write # add the watch link to the release notes
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: explainer
+          path: explainer
+      - uses: bisque-cloud/presenter@7159a1bda766df3900465cdbcc532fc5a8de495f # v1.9.4
+        with:
+          source: release
+          presentation: explainer
