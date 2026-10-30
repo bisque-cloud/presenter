@@ -84,7 +84,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: bisque-cloud/presenter
-          ref: 7159a1bda766df3900465cdbcc532fc5a8de495f # v1.9.4
+          ref: 1bcc1ea0f91811ae0a54d9ef70d6d493ad9132a0 # v1.10.0
           path: .presenter
           persist-credentials: false
 
@@ -148,7 +148,7 @@ jobs:
         with:
           name: explainer
           path: explainer
-      - uses: bisque-cloud/presenter@7159a1bda766df3900465cdbcc532fc5a8de495f # v1.9.4
+      - uses: bisque-cloud/presenter@1bcc1ea0f91811ae0a54d9ef70d6d493ad9132a0 # v1.10.0
         with:
           source: pull-request
           pull-request: ${{ needs.subject.outputs.pr }}
@@ -167,7 +167,7 @@ jobs:
         with:
           name: explainer
           path: explainer
-      - uses: bisque-cloud/presenter@7159a1bda766df3900465cdbcc532fc5a8de495f # v1.9.4
+      - uses: bisque-cloud/presenter@1bcc1ea0f91811ae0a54d9ef70d6d493ad9132a0 # v1.10.0
         with:
           source: release
           presentation: explainer
