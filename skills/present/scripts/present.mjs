@@ -2410,10 +2410,33 @@ export function serverVoiceId(voice) {
   return undefined;
 }
 
+/** What `publish` reads from a presentation folder, relative to it. */
+function dryRunFiles(workDir) {
+  const out = [];
+  for (const top of ["index.html", "context.md", "assets", "audio"]) {
+    const full = path.join(workDir, top);
+    if (!fs.existsSync(full)) continue;
+    if (fs.statSync(full).isFile()) {
+      out.push(top);
+      continue;
+    }
+    for (const name of fs.readdirSync(full, { recursive: true })) {
+      if (fs.statSync(path.join(full, name)).isFile()) out.push(path.join(top, name));
+    }
+  }
+  return out.sort();
+}
+
 async function cmdPublish(flags) {
   const htmlPath = path.resolve(flags.html ?? "index.html");
   const indexHtml = fs.readFileSync(htmlPath, "utf8");
   const workDir = path.dirname(htmlPath);
+  // `--dry-run` lists what a publish would upload and stops, before any
+  // sign-in or network call, so a CI job can check a folder it was handed.
+  if (flags["dry-run"]) {
+    for (const name of dryRunFiles(workDir)) say(`would upload: ${name}`);
+    return;
+  }
   // Resolved from the presentation's own directory, so a repo that pins an
   // account in `.bisque.json` publishes to that account.
   const auth = requireAuth(flags, workDir);
@@ -3779,7 +3802,7 @@ const USAGE = `usage:
   node present.mjs narrate [--html index.html] --voice <engine:voice> [--speed 1.0]
                            [--engine E] [--align A|none] [--device auto|cpu|gpu]
                            [--audio-dir audio]
-  node present.mjs publish [--html index.html] [--voice <engine:voice>]
+  node present.mjs publish [--html index.html] [--voice <engine:voice>] [--dry-run]
                            [--fallback-voice <engine:voice>]
                            [--title T] [--slug S] [--visibility unlisted|public|private]
                            [--presentation-id ID] [--handle H]
