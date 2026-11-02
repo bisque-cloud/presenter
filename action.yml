@@ -330,6 +330,9 @@ runs:
         SPEED: ${{ inputs.voice == '' && steps.take.outputs.speed || '' }}
         PUBLISH_ONLY: ${{ inputs.presentation != '' }}
         VISIBILITY: ${{ inputs.visibility }}
+        # Where the pull request's head lives; a fork names another repository.
+        SOURCE: ${{ inputs.source }}
+        PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name || '' }}
         WORK: ${{ runner.temp }}/release-explainer
         TITLE: ${{ steps.source.outputs.title }}
         SLUG: ${{ steps.source.outputs.slug }}
