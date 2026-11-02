@@ -63,6 +63,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }} # test only: this repo has no Claude GitHub App
+          show_full_output: true # test only: see why no video was made
           plugin_marketplaces: ${{ runner.temp }}/presenter
           plugins: presenter@bisque-cloud
           claude_args: |
