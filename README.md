@@ -220,7 +220,7 @@ Add the presenter plugin to the
 [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action)
 step you have, and Claude writes, checks and narrates the explainer, so it can
 still fix whatever the checks find. It can't publish from there: that action
-removes the means to mint the run's GitHub identity from Claude's session, on
+removes the variables that mint the run's GitHub identity from Claude's session, on
 purpose. So a second job publishes the folder Claude wrote, audio included,
 with `presentation:`. No model runs in that job, nothing is narrated again,
 and it is the only one that holds `id-token: write`:
