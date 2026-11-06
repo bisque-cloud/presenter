@@ -315,6 +315,23 @@ before slides recorded their voice is narrated again once, on the next publish,
 and carried forward after that. Use `--all` only to deliberately re-synthesize
 everything.
 
+### A presentation from an earlier session
+
+To change a presentation you no longer have the files for, pull its source.
+Don't rebuild the slides from the transcript or from memory:
+
+```sh
+node present.mjs pull --presentation https://bisque.today/p/<handle>/<slug> --dir <empty directory>
+```
+
+It takes the watch URL or the id, works only for an account that may republish
+the presentation, and writes `index.html` as published, `context.md` and
+`assets/` into that directory. It prints a `republish` command with the same
+id, slug, visibility, voice and speed. Change what you were asked to change and
+nothing else, then run that command from the directory. The URL stays, the
+slides you left alone keep their audio, and the replaced version stays in the
+history. A presentation still being added to is `resume`, not `pull`.
+
 ## 6. A video, if they want one
 
 `publish` prints a watch URL, and that URL is all a video needs. If the user

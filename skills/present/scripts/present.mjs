@@ -12,7 +12,8 @@
  *   node present.mjs publish --html index.html [--voice kokoro:af_heart]
  *   node present.mjs publish --html index.html --keep-open [--presentation-id ID]
  *   node present.mjs resume  --presentation ID|WATCH_URL [--dir DIR]
- *   node present.mjs wait    --presentation ID --survey ID
+ *   node present.mjs pull    --presentation ID|WATCH_URL [--dir DIR] [--profile NAME]
+  node present.mjs wait    --presentation ID --survey ID
  *   node present.mjs finish  --presentation ID
  *
  * `publish` implements the update loop the whole feature exists for:
@@ -3425,6 +3426,29 @@ export function resumeWrites(dir, state) {
 }
 
 /**
+ * What `pull` writes, and any of it that would replace different bytes
+ * already in `dir`. A directory holding this source pulls in place.
+ */
+export function pullWrites(dir, source, assets) {
+  const writes = [
+    { name: "index.html", text: source.indexHtml },
+    ...(typeof source.contextMd === "string"
+      ? [{ name: "context.md", text: source.contextMd }]
+      : []),
+    ...assets,
+  ];
+  const clashes = writes
+    .filter(({ name, text }) => {
+      const file = path.join(dir, name);
+      return (
+        fs.existsSync(file) && !fs.readFileSync(file).equals(Buffer.from(text))
+      );
+    })
+    .map(({ name }) => name);
+  return { writes, clashes };
+}
+
+/**
  * The id of a presentation published without `--presentation-id`, from its
  * watch URL (`https://bisque.today/p/<handle>/<slug>`, scheme optional), or
  * null when `target` is not one.
@@ -3561,6 +3585,150 @@ async function cmdResume(flags) {
       `--keep-open --presentation-id ${presentationId}` +
       (state.voice?.voiceId ? ` --voice ${state.voice.voiceId}` : "") +
       ` from ${dir}.`,
+  );
+}
+
+/** One value quoted for a POSIX shell, when it needs quoting. */
+function shellQuote(value) {
+  const text = String(value);
+  return /^[A-Za-z0-9_./:@~+=-]+$/.test(text)
+    ? text
+    : `'${text.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * The publish that puts an edited `pull` back where it came from: same id,
+ * slug, handle and visibility, so the URL stays and a private presentation is
+ * not widened by publish's default, and the same voice and speed, so every
+ * slide whose words did not change keeps its audio. The description is left
+ * off because a republish without the flag keeps it.
+ */
+export function republishCommand(source) {
+  const args = [
+    ["html", "index.html"],
+    ["presentation-id", source.presentationId],
+    ["slug", source.slug],
+    ["title", source.title],
+    ["visibility", source.visibility],
+    ...(source.org
+      ? [
+          ["org", source.org],
+          ...(source.group ? [["group", source.group]] : []),
+        ]
+      : source.handle
+        ? [["handle", source.handle]]
+        : []),
+    ...(source.voice?.voiceId ? [["voice", source.voice.voiceId]] : []),
+    ...(typeof source.voice?.speechSpeed === "number"
+      ? [["speed", source.voice.speechSpeed]]
+      : []),
+    ...(typeof source.contextMd === "string"
+      ? [["context", "context.md"]]
+      : []),
+    ...(source.madeWith?.length > 0
+      ? [["made-with", source.madeWith.join(",")]]
+      : []),
+  ];
+  return (
+    "node present.mjs publish " +
+    args.map(([name, value]) => `--${name} ${shellQuote(value)}`).join(" ")
+  );
+}
+
+/**
+ * `pull` — fetch a finished presentation's source to change it.
+ *
+ * Writes the HTML as published, `context.md` if there is one and every file
+ * under `assets/` into `--dir` (default: here), then prints the publish that
+ * puts an edit back at the same URL. Nothing on the server changes, and only
+ * an account that may republish the presentation can read it.
+ *
+ * `--presentation` is the id or the watch URL. Unlike `resume`, a URL is looked
+ * up rather than derived, so a presentation published with `--presentation-id`
+ * is found too.
+ */
+async function cmdPull(flags) {
+  const usage = "pull --presentation <id or watch URL> [--dir DIR]";
+  const target = requireIdFlag(flags.presentation, "presentation", usage);
+  const dir = path.resolve(typeof flags.dir === "string" ? flags.dir : ".");
+  fs.mkdirSync(dir, { recursive: true });
+  const auth = requireAuth(flags, dir);
+
+  let source;
+  try {
+    const presentationId = target.includes("/")
+      ? (
+          await api(
+            `/api/presentations/context?url=${encodeURIComponent(target)}`,
+            { method: "GET", auth },
+          )
+        ).presentationId
+      : target;
+    source = await api(
+      `/v1/presentations/${encodeURIComponent(presentationId)}/source`,
+      { method: "GET", auth },
+    );
+  } catch (error) {
+    if (error instanceof ApiError && error.code === "ROUTE_NOT_FOUND") {
+      fail("this server cannot read a presentation's source yet.");
+    }
+    if (error instanceof ApiError && error.status === 404) {
+      fail(
+        `${error.message} If another account published ${target}, pull it ` +
+          `with that account's --profile.`,
+      );
+    }
+    throw error;
+  }
+
+  const assets = await Promise.all(
+    source.assets.map(async (asset) => {
+      const res = await fetch(asset.url);
+      if (!res.ok) {
+        fail(`could not download ${asset.path} (HTTP ${res.status}).`);
+      }
+      return {
+        name: asset.path,
+        text: Buffer.from(await res.arrayBuffer()),
+      };
+    }),
+  );
+  const { writes, clashes } = pullWrites(dir, source, assets);
+  if (clashes.length > 0) {
+    fail(
+      `${clashes.join(", ")} in ${dir} differ from what presentation ` +
+        `${source.presentationId} has published. Pull into an empty directory ` +
+        `with --dir.`,
+    );
+  }
+  for (const { name, text } of writes) {
+    const file = insideDir(dir, name, "--presentation");
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    writeInside(file, text);
+  }
+
+  const republish = republishCommand(source);
+  process.stdout.write(
+    JSON.stringify(
+      {
+        presentationId: source.presentationId,
+        webUrl: source.webUrl,
+        title: source.title,
+        visibility: source.visibility,
+        version: source.version,
+        dir,
+        voice: source.voice,
+        assets: source.assets.map((asset) => asset.path),
+        republish,
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+  say(
+    `pulled version ${source.version} into ${dir}. Change what was asked for ` +
+      `in index.html and nothing else, then run the republish command above ` +
+      `from that directory.`,
   );
 }
 
@@ -3829,6 +3997,10 @@ answers so far; publish --keep-open from that directory continues it. It takes
 the presentation's id, or its watch URL when the first publish stopped before
 printing the id.
 
+pull fetches a finished presentation you may republish: index.html as
+published, context.md and assets/ into --dir, then the publish that puts an
+edit back at the same URL. It takes the id or the watch URL.
+
 --best-effort is for a publish nobody can come back to fix, such as a CI
 job's last step. The problems plan reports are published as warnings, in the
 result's "warnings" and on stderr, instead of stopping the publish. Leave it
@@ -3872,6 +4044,8 @@ async function main() {
       return cmdPublish(flags);
     case "resume":
       return cmdResume(flags);
+    case "pull":
+      return cmdPull(flags);
     case "wait":
       return cmdWait(flags);
     case "finish":

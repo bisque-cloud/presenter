@@ -20,6 +20,7 @@ The tools you have:
 | `list_presentations`         | What this account has already published.               |
 | `get_presentation_analytics` | Views and completion for one of them.                  |
 | `get_presentation_context`   | Read someone else's presentation — transcript and all. |
+| `get_presentation_source`    | The HTML of one of yours, to edit it and publish back. |
 
 ## 1. Get the spec — never write the format from memory
 

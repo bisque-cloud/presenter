@@ -223,42 +223,68 @@ still fix whatever the checks find. It can't publish from there: that action
 removes the means to mint the run's GitHub identity from Claude's session, on
 purpose. So a second job publishes the folder Claude wrote, audio included,
 with `presentation:`. No model runs in that job, nothing is narrated again,
-and it is the only one that holds `id-token: write`:
+and it is the only one that holds `id-token: write`.
+
+Claude's shell is limited to `gh pr view`, `gh pr diff` and the four
+subcommands of the skill's script that write and narrate, so it cannot run
+`login`, `publish` or anything else, and it writes only to `.explainer/`. The
+plugin is checked out at the same commit as the publishing Action, outside
+the checkout, and the speech engine is installed before Claude starts:
 
 ```yaml
 jobs:
   write:
     runs-on: ubuntu-latest
     permissions: { contents: read, pull-requests: read }
+    outputs: { written: "${{ steps.check.outputs.written }}" }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - run: |
+          git init -q "$RUNNER_TEMP/presenter"
+          git -C "$RUNNER_TEMP/presenter" fetch -q --depth 1 https://github.com/bisque-cloud/presenter.git 1bcc1ea0f91811ae0a54d9ef70d6d493ad9132a0 # v1.10.0
+          git -C "$RUNNER_TEMP/presenter" checkout -q FETCH_HEAD
+      - uses: actions/setup-node@v7
+        with: { node-version: "22", package-manager-cache: false }
+      - run: |
+          node "$RUNNER_TEMP/presenter/action/src/install-bisque-voice.ts"
+          ~/.bisque/bin/bisque-voice install kokoro
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
-          plugin_marketplaces: https://github.com/bisque-cloud/presenter.git
+          plugin_marketplaces: ${{ runner.temp }}/presenter
           plugins: presenter@bisque-cloud
-          claude_args: --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch,Skill
+          claude_args: >-
+            --allowedTools "Skill,Write(./.explainer/**),Edit(./.explainer/**),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs spec:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs plan:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs pronunciation-report:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs narrate:*)"
           prompt: |
-            Use the present skill to explain this pull request. Write it to
-            ${{ runner.temp }}/explainer and run every step up to, not
-            including, publish, ending with `narrate --voice kokoro:af_heart`.
-      - uses: actions/upload-artifact@v4
-        with: { name: explainer, path: "${{ runner.temp }}/explainer" }
+            Use the present skill to explain this pull request. Run its script
+            as node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs.
+            Write it to .explainer/ and run every step up to, not including,
+            publish, ending with `narrate --voice kokoro:af_heart`.
+      - id: check
+        run: |
+          if [ -f .explainer/index.html ] && [ -z "$(git ls-files .explainer)" ]; then
+            echo "written=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.check.outputs.written == 'true'
+        uses: actions/upload-artifact@v7
+        with: { name: explainer, path: .explainer, include-hidden-files: true }
   publish:
     needs: write
+    if: needs.write.outputs.written == 'true'
     runs-on: ubuntu-latest
     permissions: { contents: read, pull-requests: write, id-token: write }
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with: { name: explainer, path: explainer }
-      - uses: bisque-cloud/presenter@v1
+      - uses: bisque-cloud/presenter@1bcc1ea0f91811ae0a54d9ef70d6d493ad9132a0 # v1.10.0
         with:
           source: pull-request
           presentation: explainer
 ```
 
-The full workflow, with the prompt it was tested with, is
+The full workflow, with every action pinned to a commit and the prompt it
+was tested with, is
 [`examples/claude-code-action-pull-request-explainer.yml`](./examples/claude-code-action-pull-request-explainer.yml).
 
 To keep the agent further from publishing, on a dedicated, capped Anthropic
