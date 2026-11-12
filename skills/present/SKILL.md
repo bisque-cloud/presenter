@@ -86,8 +86,14 @@ accepts that. The publish response says which slides were approximate.
 
 **No credentials.** `node present.mjs login` prints a URL and a pairing code;
 have the user open the URL and approve, and it saves the key to
-`~/.bisque/config.json` under the profile `present`. (`BISQUE_API_KEY` +
-`BISQUE_USER_ID` in the environment win over the file.)
+`~/.bisque/config.json`, in the profile that already holds that account or
+else `present`. `bisque login` writes the same file, so either sign-in serves
+both. (`BISQUE_API_KEY` + `BISQUE_USER_ID` in the environment win over the
+file.)
+
+**A rejected or unreachable key.** When a command says the key was revoked,
+or that it is in the macOS keychain where only `bisque` can read it, run the
+sign-in it names for that same profile; the new key replaces the old one.
 
 **Ambiguous credentials.** With several accounts configured, resolution refuses
 to guess rather than publish to the wrong one — ask the user which, then pass

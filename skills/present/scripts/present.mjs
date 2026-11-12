@@ -1350,6 +1350,7 @@ export function resolveAuth({ profile, cwd = process.cwd() } = {}) {
       ? {
           apiKey: profiles[name].apiKey,
           userId: profiles[name].userId,
+          profile: name,
           from: why,
         }
       : null;
@@ -1357,6 +1358,9 @@ export function resolveAuth({ profile, cwd = process.cwd() } = {}) {
   if (asked) {
     const chosen = pick(asked, `profile ${asked}`);
     if (chosen) return chosen;
+    if (profiles[asked]?.userId) {
+      return { error: keyOutOfReach(asked) };
+    }
     return {
       error: `Profile ${JSON.stringify(asked)} has no stored credentials. Available: ${usable.join(", ") || "(none)"}.`,
     };
@@ -1373,7 +1377,36 @@ export function resolveAuth({ profile, cwd = process.cwd() } = {}) {
         `.bisque.json with {"profile": "<name>"}.`,
     };
   }
+  const outOfReach = Object.keys(profiles).filter((n) => profiles[n]?.userId);
+  if (outOfReach.length === 1) return { error: keyOutOfReach(outOfReach[0]) };
   return null;
+}
+
+/**
+ * A profile with an account but no key in the file: `bisque` 0.25.0 and
+ * earlier kept the key in the macOS keychain, where only that binary can
+ * read it. Signing in again with any newer `bisque`, or with `login` here,
+ * writes it to the file every tool reads.
+ */
+function keyOutOfReach(name) {
+  return (
+    `Profile ${JSON.stringify(name)} has its key in the macOS keychain, where ` +
+    `only the \`bisque\` command can read it. Run \`bisque update\` and then ` +
+    `\`bisque login --profile ${name}\`, or \`node present.mjs login --profile ` +
+    `${name}\`, once; either writes the key to ${CONFIG_PATH}, which every ` +
+    `tool reads.`
+  );
+}
+
+/** What to run when Bisque rejects a saved key (HTTP 401). */
+function rejectedKeyMessage(auth) {
+  const flag = auth.profile ? ` --profile ${auth.profile}` : "";
+  return (
+    `Bisque rejected the API key from ${auth.from}: it was revoked, or it is ` +
+    `not one Bisque issued. Sign in again with \`node present.mjs login${flag}\` ` +
+    `(or \`bisque login${flag}\`); the new key replaces this one in ` +
+    `${CONFIG_PATH}.`
+  );
 }
 
 /**
@@ -1405,8 +1438,9 @@ function requireAuth(flags = {}, cwd = process.cwd()) {
   if (auth?.error) fail(auth.error);
   if (insideClaudeCodeAction()) fail(CLAUDE_CODE_ACTION_PUBLISH);
   fail(
-    "No Bisque credentials. Run `node present.mjs login` (browser sign-in), or " +
-      "set BISQUE_API_KEY and BISQUE_USER_ID.",
+    "No Bisque credentials. Run `node present.mjs login` (browser sign-in; " +
+      "`bisque login` does the same if you use the bisque command), or set " +
+      "BISQUE_API_KEY and BISQUE_USER_ID.",
   );
 }
 
@@ -1484,10 +1518,17 @@ async function api(target, { method = "POST", body, auth } = {}) {
     /* non-JSON body — surfaced raw below */
   }
   if (!res.ok) {
+    // A saved key that was revoked answers 401 on every call; saying only
+    // "Invalid API key." left people (and agents) guessing which sign-in to
+    // run. Keys from the environment or GitHub are the caller's to replace.
+    const rejected =
+      res.status === 401 && auth && !auth.githubOidc && auth.profile;
     throw new ApiError(
       res.status,
       json?.error?.code ?? "HTTP_ERROR",
-      json?.error?.message ?? text.slice(0, 500),
+      rejected
+        ? rejectedKeyMessage(auth)
+        : (json?.error?.message ?? text.slice(0, 500)),
     );
   }
   return json;
@@ -2106,15 +2147,29 @@ function gatherMachineProfile() {
   }
 }
 
+/**
+ * Where a sign-in is saved: the `--profile` asked for; else the profile that
+ * already holds this account, so signing in again after a key was revoked
+ * replaces the dead key where every tool already looks for it rather than
+ * adding a second profile for the same account beside it; else `present`.
+ * Never another account's profile.
+ */
+export function loginProfileName(profiles, userId, asked) {
+  if (asked) return asked;
+  const same = Object.keys(profiles ?? {})
+    .sort()
+    .filter((name) => profiles[name]?.userId === userId);
+  if (same.includes("present")) return "present";
+  return same[0] ?? "present";
+}
+
 async function cmdLogin(flags = {}) {
   // Sign-in writes to a named profile so a second account can be added without
   // displacing the first. Everything that READS credentials already honours
   // `--profile`; without it here, a multi-account machine could resolve a
   // profile it had no way to create.
-  const profileName =
-    typeof flags.profile === "string" && flags.profile
-      ? flags.profile
-      : "present";
+  const asked =
+    typeof flags.profile === "string" && flags.profile ? flags.profile : null;
   const machineProfile = gatherMachineProfile();
   const start = await api("/api/create-cli-session", {
     body: {
@@ -2147,8 +2202,7 @@ async function cmdLogin(flags = {}) {
     if (poll.status !== "approved") fail(`Sign-in ${poll.status}.`);
     const config = readConfig() ?? {};
     config.profiles = config.profiles ?? {};
-    // Its own profile: never overwrite whatever `bisque login` put in
-    // `default`, which may belong to a different account.
+    const profileName = loginProfileName(config.profiles, poll.userId, asked);
     config.profiles[profileName] = {
       ...(config.profiles[profileName] ?? {}),
       userId: poll.userId,

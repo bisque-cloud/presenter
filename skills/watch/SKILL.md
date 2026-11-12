@@ -41,9 +41,14 @@ unlisted presentations are served to anonymous callers:
 curl -s "https://bisque.today/api/presentations/context?url=<watch-url>"
 ```
 
-If a key exists but the response is 401, it is expired or wrong. Say so and
-retry without the header rather than stopping — the presentation may well be
-public.
+If a key exists but the response is 401, it was revoked or replaced. Say so
+and retry without the header rather than stopping — the presentation may well
+be public. For the user's own private ones, the fix is to sign in again as that
+same profile: `bisque login --profile <name>`, or `node present.mjs login
+--profile <name>`; either writes the new key over the dead one. A profile with
+no `apiKey` was signed in by `bisque` 0.25.0 or earlier, which kept the key in
+the macOS keychain where only that command can read it; `bisque update` and
+`bisque login --profile <name>` once moves it into the file.
 
 The target can be given either way:
 
