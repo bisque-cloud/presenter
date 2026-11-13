@@ -2371,17 +2371,34 @@ function cmdPronunciationReport(flags) {
  * the warnings the engine raised while speaking — for the author to judge
  * before anything is published.
  */
-function cmdNarrate(flags) {
-  if (typeof flags.voice !== "string" || !flags.voice.includes(":")) {
+async function cmdNarrate(flags) {
+  const htmlPath = path.resolve(flags.html ?? "index.html");
+  let auth = null;
+  let me = null;
+  if (typeof flags.profile === "string") {
+    auth = requireAuth(flags, path.dirname(htmlPath));
+    me = await fetchMeSafe(auth);
+    if (!me)
+      fail(
+        "Cannot read the account's narration settings; nothing was synthesized.",
+      );
+    applyAccountSettings(flags, me);
+    const problem = applyFallbackVoice(flags, me);
+    if (problem) fail(problem);
+  }
+  const clone = isCloneEngine(engineFor(flags));
+  if (
+    !clone &&
+    (typeof flags.voice !== "string" || !flags.voice.includes(":"))
+  ) {
     fail(
       "--voice <engine:voice> is required: narrate in the voice publish will " +
         "use, e.g. --voice kokoro:af_heart, or publish narrates again.",
     );
   }
-  if (isCloneEngine(engineFor(flags))) {
+  if (clone && !auth) {
     fail(
-      "narrate cannot use a cloned voice: the recording it is cloned from " +
-        "comes from the account, and narrate reads no account. Publish narrates it.",
+      "A cloned voice needs --profile <account> so narrate can check the account's reference recording.",
     );
   }
   if (flags.speed === true) {
@@ -2391,7 +2408,6 @@ function cmdNarrate(flags) {
   if (!Number.isFinite(speed) || speed < 0.7 || speed > 1.2) {
     fail("--speed must be a number between 0.7 and 1.2");
   }
-  const htmlPath = path.resolve(flags.html ?? "index.html");
   const html = fs.readFileSync(htmlPath, "utf8");
   const problems = lintPresentation(html);
   if (problems.length > 0) {
@@ -2409,6 +2425,7 @@ function cmdNarrate(flags) {
   const bin = requireTts();
   ensureEngineInstalled(bin, flags);
   ensureAlignerInstalled(bin, flags);
+  if (clone) await ensureCloneVoiceReady(bin, flags, auth, me);
   fs.mkdirSync(audioDir, { recursive: true });
   const slides = plan.map((slide) => {
     const { mp3, sidecar } = audioFiles(audioDir, slide.slideKey);
@@ -4068,7 +4085,7 @@ const USAGE = `usage:
   node present.mjs plan    [--html index.html]
   node present.mjs pronunciation-report [--html index.html] --voice <engine:voice>
                            [--engine E]
-  node present.mjs narrate [--html index.html] --voice <engine:voice> [--speed 1.0]
+  node present.mjs narrate [--html index.html] (--voice <engine:voice> | --profile <account>) [--speed 1.0]
                            [--engine E] [--align A|none] [--device auto|cpu|gpu]
                            [--audio-dir audio]
   node present.mjs publish [--html index.html] [--voice <engine:voice>]

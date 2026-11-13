@@ -226,6 +226,11 @@ narration you judged is the narration that ships. It needs no account:
 node present.mjs narrate --html index.html --voice <engine:voice>
 ```
 
+For a saved account voice, including a cloned voice, pass `--profile <account>`
+instead of `--voice`. This uses the same account settings and local clone
+preparation as `publish`, and writes the audio before anything is published.
+An explicit `--voice` still wins over the saved setting.
+
 Use the voice the task names, else `kokoro:af_heart`. bisque-cloud/presenter's
 `presentation:` input publishes in the voice and speed you narrated in; any
 other `publish` narrates again unless it names the same ones. It writes `audio/` beside `index.html` and prints, per
