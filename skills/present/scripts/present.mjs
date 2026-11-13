@@ -1084,6 +1084,7 @@ const CLONE_STATE_PATH = path.join(
   ".bisque",
   "voice-clone-state.json",
 );
+const SAVED_CLONE_ID = Symbol("saved clone id");
 
 function readCloneState() {
   try {
@@ -1129,10 +1130,18 @@ async function ensureCloneVoiceReady(bin, flags, auth, me) {
   // name gets bisque-voice's own error, which lists what exists.
   if (typeof flags.voice === "string" && flags.voice.includes(":")) return;
 
-  const accountUploadedAt =
-    typeof me?.settings?.voiceClone?.uploadedAt === "string"
-      ? me.settings.voiceClone.uploadedAt
-      : null;
+  const selection = accountCloneSelection(flags, me);
+  const {
+    id: savedCloneId,
+    localName,
+    uploadedAt: accountUploadedAt,
+  } = selection;
+  if (savedCloneId && !selection.exists) {
+    fail(
+      "The selected saved voice no longer exists. Choose a voice at https://bisque.cloud/settings/voice.",
+    );
+  }
+  const stateKey = savedCloneId ? `${engineId}:${savedCloneId}` : engineId;
 
   let existing = null;
   const listed = runTtsTry(bin, ["list", "--json"], { timeoutMs: 30_000 });
@@ -1143,12 +1152,14 @@ async function ensureCloneVoiceReady(bin, flags, auth, me) {
       );
       // "me" is the clone this script manages from the account recording;
       // any other name was cloned by hand and is deliberate — respect it.
-      existing = clones.find((v) => v.name === "me") ?? clones[0] ?? null;
+      existing =
+        clones.find((v) => v.name === localName) ??
+        (savedCloneId ? null : (clones[0] ?? null));
     } catch {
       /* unparsable — treat as no clones and try the account */
     }
   }
-  if (existing && existing.name !== "me") {
+  if (existing && !savedCloneId && existing.name !== "me") {
     flags.voice = `${engineId}:${existing.name}`;
     say(`voice: ${flags.voice} (cloned by hand on this machine)`);
     return;
@@ -1160,11 +1171,11 @@ async function ensureCloneVoiceReady(bin, flags, auth, me) {
     const clonedFrom =
       typeof existing.sourceId === "string"
         ? existing.sourceId
-        : readCloneState()[engineId];
+        : readCloneState()[stateKey];
     const current =
       accountUploadedAt === null || clonedFrom === accountUploadedAt;
     if (current) {
-      flags.voice = `${engineId}:me`;
+      flags.voice = `${engineId}:${localName}`;
       say(`voice: ${flags.voice} (cloned on this machine)`);
       return;
     }
@@ -1180,7 +1191,10 @@ async function ensureCloneVoiceReady(bin, flags, auth, me) {
   }
   let ref;
   try {
-    ref = await api("/api/voice-clone-reference", { method: "GET", auth });
+    ref = await api(
+      `/api/voice-clone-reference${savedCloneId ? `?voiceId=${encodeURIComponent(savedCloneId)}` : ""}`,
+      { method: "GET", auth },
+    );
   } catch (error) {
     if (error instanceof ApiError && error.code === "NO_VOICE_CLONE") {
       fail(
@@ -1207,13 +1221,13 @@ async function ensureCloneVoiceReady(bin, flags, auth, me) {
     fs.writeFileSync(wavPath, Buffer.from(ref.wavBase64, "base64"));
     fs.writeFileSync(passagePath, ref.passage);
     say(`Cloning your voice into ${engineId} — one-time, a few seconds:`);
-    say(`  bisque-voice clone --engine ${engineId} --name me`);
+    say(`  bisque-voice clone --engine ${engineId} --name ${localName}`);
     const args = [
       "clone",
       "--engine",
       engineId,
       "--name",
-      "me",
+      localName,
       "--reference",
       wavPath,
       "--transcript-file",
@@ -1229,9 +1243,9 @@ async function ensureCloneVoiceReady(bin, flags, auth, me) {
   }
   // Older binaries can't record provenance in the manifest — keep it here.
   if (!manifestProvenance && sourceId !== null) {
-    writeCloneState(engineId, sourceId);
+    writeCloneState(stateKey, sourceId);
   }
-  flags.voice = `${engineId}:me`;
+  flags.voice = `${engineId}:${localName}`;
   say(`voice: ${flags.voice} (cloned from your account's recording)`);
 }
 
@@ -1605,6 +1619,28 @@ function accountSettings(me, handle) {
   };
 }
 
+/** A stable cache per saved voice; display-name edits never trigger a re-clone. */
+export function accountCloneSelection(flags, me) {
+  const saved = accountSettings(me, publishHandle(flags, me));
+  const id =
+    flags[SAVED_CLONE_ID] ??
+    (isCloneEngine(saved.engine) &&
+    /^clone-[a-z0-9-]{1,64}$/.test(saved.voiceId ?? "")
+      ? saved.voiceId
+      : null);
+  const recording =
+    id && id !== "clone-default"
+      ? me?.settings?.voiceClones?.[id]
+      : me?.settings?.voiceClone;
+  return {
+    id,
+    localName: id && id !== "clone-default" ? id : "me",
+    uploadedAt:
+      typeof recording?.uploadedAt === "string" ? recording.uploadedAt : null,
+    exists: !!recording,
+  };
+}
+
 /** A settings voiceId that LOCAL synthesis can actually speak, resolved
  *  against the engine it was saved with — a bare voice id means nothing on its
  *  own, so the engine is part of the question. Engine-qualified ids
@@ -1631,25 +1667,44 @@ export function localVoiceRef(voiceId, engineId) {
  *  conflict. */
 export function applyAccountSettings(flags, me) {
   const settings = accountSettings(me, publishHandle(flags, me));
+  // An explicit saved voice is prepared by ensureCloneVoiceReady, just like a
+  // settings selection. Other --voice values keep their existing precedence.
+  if (
+    typeof flags.voice === "string" &&
+    /^clone-[a-z0-9-]{1,64}$/.test(flags.voice)
+  ) {
+    flags[SAVED_CLONE_ID] = flags.voice;
+    delete flags.voice;
+    flags.engine ??= isCloneEngine(settings.engine)
+      ? settings.engine
+      : "qwen3-clone-06b";
+  }
   const source = settings.fromChannel
     ? `@${settings.fromChannel} setting`
     : "account setting";
-  if (!flags.voice && settings.voiceId) {
-    // An explicit --engine outranks the account's, and inside this branch
-    // flags.voice is unset — so engineFor() is exactly "the engine this publish
-    // will run", which is the engine a bare voiceId must be read under.
-    const local = localVoiceRef(
-      settings.voiceId,
-      engineFor(flags) ?? settings.engine,
-    );
-    if (local) {
-      flags.voice = local;
-      say(`voice: ${local} (${source})`);
+  if (!flags.voice && !flags[SAVED_CLONE_ID] && settings.voiceId) {
+    if (
+      isCloneEngine(engineFor(flags) ?? settings.engine) &&
+      /^clone-[a-z0-9-]{1,64}$/.test(settings.voiceId)
+    ) {
+      flags[SAVED_CLONE_ID] = settings.voiceId;
     } else {
-      say(
-        `note: ${source} ${JSON.stringify(settings.voiceId)} is not ` +
-          `a local voice; pass --voice, or change the setting on bisque.cloud.`,
+      // An explicit --engine outranks the account's, and inside this branch
+      // flags.voice is unset — so engineFor() is exactly "the engine this publish
+      // will run", which is the engine a bare voiceId must be read under.
+      const local = localVoiceRef(
+        settings.voiceId,
+        engineFor(flags) ?? settings.engine,
       );
+      if (local) {
+        flags.voice = local;
+        say(`voice: ${local} (${source})`);
+      } else {
+        say(
+          `note: ${source} ${JSON.stringify(settings.voiceId)} is not ` +
+            `a local voice; pass --voice, or change the setting on bisque.cloud.`,
+        );
+      }
     }
   }
   const voiceEngine =
@@ -2511,6 +2566,15 @@ async function cmdPublish(flags) {
   // A repository publishing with its GitHub identity has no account, so
   // there is no saved voice to read and nothing to wait for.
   const me = auth.githubOidc ? null : await fetchMeSafe(auth);
+  if (
+    !me &&
+    typeof flags.voice === "string" &&
+    /^clone-[a-z0-9-]{1,64}$/.test(flags.voice)
+  ) {
+    fail(
+      "Could not read this saved voice from your account. Retry when /api/me is available.",
+    );
+  }
   if (me) {
     applyAccountSettings(flags, me);
     if (me.account && !me.account.username && !flags.handle) {
@@ -2589,7 +2653,13 @@ async function cmdPublish(flags) {
   if (plan.length > 0 && isCloneEngine(engineFor(flags))) {
     await ensureCloneVoiceReady(requireTts(), flags, auth, me);
   }
-  const voiceId = serverVoiceId(flags.voice);
+  const selectedRecording =
+    flags[SAVED_CLONE_ID] === "clone-default"
+      ? me?.settings?.voiceClone
+      : me?.settings?.voiceClones?.[flags[SAVED_CLONE_ID]];
+  const voiceId = selectedRecording?.elevenLabsVoiceId
+    ? `cloud:${selectedRecording.elevenLabsVoiceId}`
+    : serverVoiceId(flags.voice);
   // The voice the audio below is spoken in, engine-qualified, and named the
   // same way in the create body and on every slide: the server carries a
   // slide forward only when the voice it recorded equals the one a publish
@@ -4025,6 +4095,10 @@ bisque.cloud (via /api/me) when omitted; --fallback-voice is used only when
 saved voice is not a local one, a publish with --fallback-voice and no --voice
 stops before narrating. Whatever engine that resolves to is installed on first
 use.
+
+Pass --voice clone-<id> to choose one of your saved cloned voices for this
+publish without changing the default. Other voices keep engine:voice syntax.
+Saved cloned voices each keep their own local cache.
 
 narrate narrates every slide here and publishes nothing, with no account. A
 later publish of the folder in the same voice and speed uploads that audio

@@ -297,6 +297,13 @@ says what it is about to download and how large (from `bisque-voice engines
 that message to the user in plain language; there is nothing else to do.
 
 For a clone engine (`qwen3-clone-*`), `publish` also makes sure the voice
+selected in Settings > Voice exists locally. Saved voices have stable `clone-*`
+IDs in `/api/me` under `settings.voiceClones` (`clone-default` is the original
+`settings.voiceClone`). To use a particular saved voice for one presentation,
+pass its ID with `--voice clone-<id>`; this does not change the account default.
+Each saved voice is cached separately, so switching voices keeps earlier clones.
+
+For the original recording, `publish` makes sure the voice
 itself exists: if this machine has no cloned voice for that engine, it fetches
 the account's reference recording (made in the browser during the welcome
 flow) and runs `bisque-voice clone` locally, once. If the account has no
