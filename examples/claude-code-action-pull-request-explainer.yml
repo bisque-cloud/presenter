@@ -11,7 +11,7 @@
 # comments. Only that job holds `id-token: write`, the same split PyPI's
 # trusted publishing and GitHub Pages use between building and publishing.
 #
-# Claude's shell can run `gh pr view`, `gh pr diff` and four subcommands of
+# Claude's shell can run `gh pr view`, `gh pr diff` and five subcommands of
 # the skill's script, and it can write only to .explainer/. No other
 # command, no `login` or `publish`, and no web access. Every action is pinned
 # to a full commit SHA, and the plugin is checked out at the same commit as
@@ -70,7 +70,7 @@ jobs:
           plugin_marketplaces: ${{ runner.temp }}/presenter
           plugins: presenter@bisque-cloud
           claude_args: >-
-            --allowedTools "Skill,Write(./.explainer/**),Edit(./.explainer/**),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs spec:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs plan:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs pronunciation-report:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs narrate:*)"
+            --allowedTools "Skill,Write(./.explainer/**),Edit(./.explainer/**),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs doctor:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs spec:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs plan:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs pronunciation-report:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs narrate:*)"
             --max-turns 150
           prompt: |
             Use the present skill to explain pull request

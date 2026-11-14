@@ -225,8 +225,8 @@ purpose. So a second job publishes the folder Claude wrote, audio included,
 with `presentation:`. No model runs in that job, nothing is narrated again,
 and it is the only one that holds `id-token: write`.
 
-Claude's shell is limited to `gh pr view`, `gh pr diff` and the four
-subcommands of the skill's script that write and narrate, so it cannot run
+Claude's shell is limited to `gh pr view`, `gh pr diff` and the five
+subcommands of the skill's script that check, write and narrate, so it cannot run
 `login`, `publish` or anything else, and it writes only to `.explainer/`. The
 plugin is checked out at the same commit as the publishing Action, outside
 the checkout, and the speech engine is installed before Claude starts:
@@ -255,7 +255,7 @@ jobs:
           plugin_marketplaces: ${{ runner.temp }}/presenter
           plugins: presenter@bisque-cloud
           claude_args: >-
-            --allowedTools "Skill,Write(./.explainer/**),Edit(./.explainer/**),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs spec:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs plan:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs pronunciation-report:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs narrate:*)"
+            --allowedTools "Skill,Write(./.explainer/**),Edit(./.explainer/**),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs doctor:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs spec:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs plan:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs pronunciation-report:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs narrate:*)"
           prompt: |
             Use the present skill to explain this pull request. Run its script
             as node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs.

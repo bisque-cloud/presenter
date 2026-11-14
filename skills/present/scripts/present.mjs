@@ -2032,7 +2032,12 @@ async function cmdDoctor(flags) {
       ? `credentials: ${auth.userId} (${auth.from})`
       : auth?.error
         ? `credentials: AMBIGUOUS — ${auth.error}`
-        : "credentials: NONE — run `node present.mjs login`",
+        : insideClaudeCodeAction()
+          ? // `login` cannot work here and `publish` is another job's, so
+            // sending the agent to sign in would only stall the run.
+            "credentials: not needed here — a later job publishes this " +
+            "folder. Stop before `publish`, and do not run `login`."
+          : "credentials: NONE — run `node present.mjs login`",
   );
   // The config file holds an API key in plain text. `login` writes it 0600,
   // but a file the `bisque` CLI created earlier can be 0644 and stays that way

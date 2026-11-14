@@ -112,6 +112,14 @@ node present.mjs claim-username <handle>
 `publish` makes the same check itself and stops **before** synthesizing
 anything when the username is missing, so nothing is wasted either way.
 
+**Inside a workflow, with nobody to ask.** When a later job publishes what you
+write (a CI job, inside anthropics/claude-code-action), there is nothing here
+for you to fix: the workflow installed the speech engine, the task names the
+voice, and there is no account to sign in to. `doctor` says so there. If the
+workflow does not let you run `doctor`, skip it and go on to the spec;
+`narrate` reports a missing engine itself. Never stop the run because this
+step was refused.
+
 ## 2. Fetch the format spec — never write it from memory
 
 ```sh
