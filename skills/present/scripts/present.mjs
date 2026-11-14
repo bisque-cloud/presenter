@@ -1561,6 +1561,12 @@ async function fetchMeSafe(auth) {
   try {
     return await api("/api/me", { method: "GET", auth });
   } catch (error) {
+    // A revoked key is not a blip to continue past: `api` already carries
+    // the sign-in to run, and printing only "401 HTTP_ERROR" dropped it.
+    if (error instanceof ApiError && error.status === 401 && auth?.profile) {
+      say(`credentials: REJECTED — ${error.message}`);
+      return null;
+    }
     const detail =
       error instanceof ApiError
         ? `${error.status} ${error.code}`
