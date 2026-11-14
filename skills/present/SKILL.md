@@ -154,9 +154,12 @@ you would never know the capability existed.
 Write `index.html` per the spec, in its own directory. Each slide's narration is
 its `<aside class="notes">`; a slide without one is silent. Optionally write:
 
-- `context.md` — what the presentation can answer viewer questions from. It
-  ships **at the presentation's visibility**, so nothing more private than the
-  presentation goes in it.
+- `context.md` — what the presentation can answer viewer questions from.
+  Open it with frontmatter, as the spec shows: `description`, the text under
+  the player, and `sources`, the pages the presentation draws on, which the
+  watch page shows as links after the description. The file ships **at the
+  presentation's visibility**, so nothing more private than the presentation
+  goes in it.
 - `design.md` — theme tokens in frontmatter.
 - `assets/` — every font, image, and other file the slides reference, as the
   spec requires. `publish` walks this directory and uploads it with the
@@ -284,10 +287,10 @@ id. The narrating voice is added for you. Viewers can see the list in the watch
 page's ⋯ menu; it is never the focus of the page. If you genuinely do not know
 what model you are, leave the flag off rather than guessing.
 
-Pass `--description description.txt` to set the text under the player: a line
-or two on what the presentation covers, then the links behind it, one per line.
-Web URLs in it become links, so sources belong there and in `context.md`, not
-on a slide. The one exception is a link the viewer is meant to open, such as
+The text under the player comes from `context.md`'s frontmatter: its
+`description`, then its `sources` as links. Sources belong there, not on a
+slide. Pass `--description description.txt` only to replace that description
+with a file's text for this publish; web URLs in it become links too. The one exception is a link the viewer is meant to open, such as
 the share link on the closing slide: that goes on the slide as the full URL
 in an `<a href>`, never shortened or elided, with a QR code beside it, and
 the same URL repeated here. A republish without the flag keeps the

@@ -60,8 +60,10 @@ decides the look only; the 21 px floor and the format contract still hold.
 ## What to write
 
 - `out/index.html` — the presentation
-- `out/context.md` — viewer-facing context: a short summary, the pull request
-  URL, and the questions a viewer is likely to ask
+- `out/context.md` — viewer-facing context. It opens with frontmatter, as
+  the spec shows: `description`, a line or two on what the presentation
+  covers, and `sources`, the pull request's URL first and then the URL of each issue or pull request you name. Then a short summary and the questions a
+  viewer is likely to ask
 - `out/assets/` — every font and image you use, downloaded, referenced
   relatively from `index.html`
 - `out/title.txt` — one line: the headline on your title slide. It is the

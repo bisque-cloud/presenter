@@ -61,8 +61,10 @@ decides the look only; the 21 px floor and the format contract still hold.
 ## What to write
 
 - `out/index.html` — the presentation
-- `out/context.md` — viewer-facing context: a short summary, the release
-  URL, and the questions a viewer is likely to ask
+- `out/context.md` — viewer-facing context. It opens with frontmatter, as
+  the spec shows: `description`, a line or two on what the presentation
+  covers, and `sources`, the release page's URL first. Then a short summary and the questions a
+  viewer is likely to ask
 - `out/assets/` — every font and image you use, downloaded, referenced
   relatively from `index.html`
 - `out/title.txt` — one line: the headline on your title slide. It is the
