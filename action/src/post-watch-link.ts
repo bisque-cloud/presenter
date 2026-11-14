@@ -40,7 +40,7 @@ export function watchBlock(
   if (!id || !user) return `---\n\n${link}`;
   const poster = `https://bisque.today/poster/${user}/${id}/og-slide.png`;
   const views = `https://bisque.today/api/presentations/views-badge/${encodeURIComponent(id)}`;
-  return `---\n\n[![A narrated explainer of ${subject}](${poster})](${url})\n\n${link} [![Views](${views})](${url})`;
+  return `---\n\n[![Watch the explainer of ${subject}](${poster})](${url})\n\n${link} [![Views](${views})](${url})`;
 }
 
 const line = watchBlock(
