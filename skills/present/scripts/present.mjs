@@ -1328,7 +1328,13 @@ function pinnedOrg(from) {
 }
 
 /**
- * env → `--profile` → `.bisque.json` → `present` → `default` → the only one.
+ * `--profile` → env → `.bisque.json` → `present` → `default` → the only one.
+ *
+ * A profile named on the command line is what the person asked for on this
+ * run, so it beats a key in the environment, as a flag beats an environment
+ * variable in `gh` and `aws`. Something that starts this for an agent can
+ * then hand it one account's key in the environment and the agent can still
+ * publish a test with `--profile test`.
  *
  * It refuses to guess between several accounts: publishing someone's briefing
  * to the wrong account is silent and not obviously undoable. Credentials come
@@ -1339,14 +1345,14 @@ function pinnedOrg(from) {
 export function resolveAuth({ profile, cwd = process.cwd() } = {}) {
   const envKey = process.env.BISQUE_API_KEY;
   const envUser = process.env.BISQUE_USER_ID;
-  if (envKey && envUser) {
+  if (!profile && envKey && envUser) {
     return { apiKey: envKey, userId: envUser, from: "environment" };
   }
   // A GitHub Actions job publishing as its repository: no Bisque account, the
   // job's own GitHub-signed identity instead. Opt-in, so a self-hosted runner
   // with a saved profile never switches identity because a workflow happens
   // to hold `id-token: write`.
-  if (process.env.BISQUE_GITHUB_OIDC === "1") {
+  if (!profile && process.env.BISQUE_GITHUB_OIDC === "1") {
     return {
       apiKey: "github-oidc",
       userId: "",
@@ -4170,10 +4176,10 @@ CI job that publishes a folder an earlier job narrated.
 --org publishes into a company's library on bisque.team (members only by
 default); a repo can pin it with {"org": "<slug>"} in .bisque.json.
 
-Credentials: BISQUE_API_KEY + BISQUE_USER_ID, else BISQUE_GITHUB_OIDC=1 in a
-GitHub Actions job with id-token: write (publishes to /p/{owner}/{repo}, no
-Bisque account), else --profile / BISQUE_PROFILE / .bisque.json's "profile",
-else the single profile in ~/.bisque/config.json.`;
+Credentials: --profile, else BISQUE_API_KEY + BISQUE_USER_ID, else
+BISQUE_GITHUB_OIDC=1 in a GitHub Actions job with id-token: write (publishes
+to /p/{owner}/{repo}, no Bisque account), else BISQUE_PROFILE / .bisque.json's
+"profile", else the single profile in ~/.bisque/config.json.`;
 
 async function main() {
   if (typeof fetch !== "function") {

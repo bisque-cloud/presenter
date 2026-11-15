@@ -89,7 +89,7 @@ have the user open the URL and approve, and it saves the key to
 `~/.bisque/config.json`, in the profile that already holds that account or
 else `present`. `bisque login` writes the same file, so either sign-in serves
 both. (`BISQUE_API_KEY` + `BISQUE_USER_ID` in the environment win over the
-file.)
+file, and `--profile <name>` wins over both.)
 
 **A rejected or unreachable key.** When a command says the key was revoked,
 or that it is in the macOS keychain where only `bisque` can read it, run the
