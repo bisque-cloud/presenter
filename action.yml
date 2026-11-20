@@ -125,7 +125,8 @@ inputs:
       public, unlisted or private. Empty means public for a public repository
       and private for a private one, which only people who can open the
       repository on GitHub can watch, so private notes never land on a public
-      channel by default.
+      channel by default. A pull request from a fork of a public repository
+      is unlisted until a maintainer makes it public.
     required: false
     default: ""
   github-token:
@@ -329,6 +330,9 @@ runs:
         SPEED: ${{ inputs.voice == '' && steps.take.outputs.speed || '' }}
         PUBLISH_ONLY: ${{ inputs.presentation != '' }}
         VISIBILITY: ${{ inputs.visibility }}
+        # Where the pull request's head lives; a fork names another repository.
+        SOURCE: ${{ inputs.source }}
+        PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name || '' }}
         WORK: ${{ runner.temp }}/release-explainer
         TITLE: ${{ steps.source.outputs.title }}
         SLUG: ${{ steps.source.outputs.slug }}

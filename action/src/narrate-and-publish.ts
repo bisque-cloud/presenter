@@ -76,8 +76,19 @@ if (!visibility) {
     "--json",
     "isPrivate",
   ]).isPrivate;
-  visibility = isPrivate ? "private" : "public";
-  console.log(`visibility: ${visibility} (from repository visibility)`);
+  // A pull request from a fork is written by someone the maintainers have
+  // not reviewed yet. Its explainer is unlisted until a maintainer makes it
+  // public, so an unreviewed stranger's words never land on the
+  // repository's public channel under the repository's name.
+  const fromFork =
+    !isPrivate &&
+    process.env.SOURCE === "pull-request" &&
+    process.env.PR_HEAD_REPO !== "" &&
+    process.env.PR_HEAD_REPO !== process.env.REPO;
+  visibility = isPrivate ? "private" : fromFork ? "unlisted" : "public";
+  console.log(
+    `visibility: ${visibility} (from ${fromFork ? "a fork's pull request" : "repository visibility"})`,
+  );
 }
 
 const title = listingTitle(out, process.env.TITLE || "");
