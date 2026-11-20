@@ -1,0 +1,130 @@
+# Explain each new pull request with the Claude Code you already run in
+# anthropics/claude-code-action, and get a watch link back as a comment.
+#
+# Two jobs, because Claude's session cannot publish: claude-code-action
+# removes the variables that mint the run's GitHub identity before Claude
+# starts. So Claude does everything up to publishing with the presenter
+# plugin, where it can still fix what the checks find: it writes the
+# explainer, checks it, narrates it on the runner and judges the narration.
+# A second job, on a fresh runner, only publishes that folder and its audio
+# to this repository's own channel, bisque.today/p/{owner}/{repo}, and
+# comments. Only that job holds `id-token: write`, the same split PyPI's
+# trusted publishing and GitHub Pages use between building and publishing.
+#
+# Claude's shell can run `gh pr view`, `gh pr diff` and four subcommands of
+# the skill's script, and it can write only to .explainer/. No other
+# command, no `login` or `publish`, and no web access. Every action is pinned
+# to a full commit SHA, and the plugin is checked out at the same commit as
+# the publishing Action. Update them together.
+#
+# One secret: CLAUDE_CODE_OAUTH_TOKEN, from `claude setup-token`, which the
+# repository already has if it runs claude-code-action on a Claude plan. No
+# Bisque account.
+#
+# A pull request from a fork runs without secrets, so this explains pull
+# requests from branches in this repository.
+name: Test claude-code-action example
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, reopened]
+
+jobs:
+  write:
+    # test only: the draft condition is dropped
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      written: ${{ steps.check.outputs.written }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      # The plugin, at the same commit as the publishing Action below. Outside
+      # the checkout, so Claude cannot edit the script it is allowed to run.
+      - name: Check out the presenter plugin
+        run: |
+          git init -q "$RUNNER_TEMP/presenter"
+          git -C "$RUNNER_TEMP/presenter" fetch -q --depth 1 https://github.com/bisque-cloud/presenter.git 1bcc1ea0f91811ae0a54d9ef70d6d493ad9132a0 # v1.10.0
+          git -C "$RUNNER_TEMP/presenter" checkout -q FETCH_HEAD
+
+      # The speech engine and its voice, from that commit's pinned,
+      # checksummed installer. Installed here because Claude's shell cannot.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Install the speech engine
+        run: |
+          node "$RUNNER_TEMP/presenter/action/src/install-bisque-voice.ts"
+          ~/.bisque/bin/bisque-voice install kokoro
+
+      - uses: anthropics/claude-code-action@6d5ae526d25ce88daa2200be073e1a373167f064 # v1.0.265
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          plugin_marketplaces: ${{ runner.temp }}/presenter
+          plugins: presenter@bisque-cloud
+          claude_args: >-
+            --allowedTools "Skill,Write(./.explainer/**),Edit(./.explainer/**),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs spec:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs plan:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs pronunciation-report:*),Bash(node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs narrate:*)"
+            --max-turns 150
+          prompt: |
+            Use the present skill to explain pull request
+            #${{ github.event.pull_request.number }} in ${{ github.repository }}
+            to a reviewer who did not write it. Read it with
+            `gh pr view ${{ github.event.pull_request.number }}` and
+            `gh pr diff ${{ github.event.pull_request.number }}`.
+
+            Nobody is here to answer questions, so decide yourself. Run the
+            skill's script as
+            node ${{ runner.temp }}/presenter/skills/present/scripts/present.mjs.
+            Write index.html, context.md and title.txt, one line holding the
+            title slide's headline, in .explainer/ in the working directory.
+            Run every step of the skill up to, not including, `publish`: the
+            spec, the presentation, `plan`, then `pronunciation-report` and
+            `narrate`, both with `--voice kokoro:af_heart`. Judge the
+            narration `narrate` reports, fix what it and the other checks
+            find, and run them again until they are clean. Leave `audio/` in
+            the folder. Do not run `login` or `publish`; the next job
+            publishes the folder with the narration you judged.
+
+      # Only what Claude wrote: a pull request that commits its own
+      # .explainer/ is not published.
+      - id: check
+        run: |
+          if [ -f .explainer/index.html ] && [ -z "$(git ls-files .explainer)" ]; then
+            echo "written=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.check.outputs.written == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: explainer
+          path: .explainer
+          include-hidden-files: true
+
+  publish:
+    needs: write
+    if: needs.write.outputs.written == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # post the watch link
+      id-token: write # publish as this repository, no Bisque account
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: explainer
+          path: explainer
+
+      # Publishes in the voice the audio was narrated in, so nothing is
+      # narrated again and no speech model is downloaded.
+      - uses: bisque-cloud/presenter@1bcc1ea0f91811ae0a54d9ef70d6d493ad9132a0 # v1.10.0
+        with:
+          source: pull-request
+          presentation: explainer
+          visibility: unlisted # test only
