@@ -332,6 +332,25 @@ that; never ask the user to produce a recording in the terminal.
 
 ## 5. Edits are cheap — never re-narrate everything
 
+To repair caption and cue timings on existing local audio without another
+take, use a supported machine with a forced aligner installed:
+
+```sh
+node present.mjs align --html index.html --align qwen3-q4
+```
+
+This updates only `audio/*.json` timing sidecars. It requires the original
+script and matching cached MP3s and retains their voice, speed and bytes. It
+publishes nothing. MP3 decoding needs ffmpeg and a bisque-voice version with
+the `align` command. Intel macOS cannot run the bundled aligners; narration
+there still has approximate timing. An alignment failure leaves the sidecars
+unchanged. A normal republish can carry forward the server's old timings.
+When the requested edit authorizes publishing the repair, rerun the original
+`publish` command with `--all --require-audio`, keeping the original `--voice`
+and `--speed` and the same presentation id. `--all` sends the repaired local
+sidecars instead of carrying forward the server's narration; `--require-audio`
+stops if any matching local recording is missing, so nothing is synthesized.
+
 Editing a slide and re-running the same `publish` command is the whole point:
 
 1. It publishes **without audio** first, purely to ask the server what changed.
@@ -345,8 +364,9 @@ the same `--title`/`--slug`/`--presentation-id`/`--speed` as before, or it is a
 different presentation. A different voice re-narrates every slide on its own:
 audio is carried forward only in the voice it was spoken in. Audio published
 before slides recorded their voice is narrated again once, on the next publish,
-and carried forward after that. Use `--all` only to deliberately re-synthesize
-everything.
+and carried forward after that. `--all` refreshes every slide's server audio
+and timings from matching local recordings, synthesizing only missing ones.
+Add `--require-audio` to forbid synthesis, including after a timing repair.
 
 ### A presentation from an earlier session
 

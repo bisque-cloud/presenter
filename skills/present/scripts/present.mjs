@@ -1053,7 +1053,12 @@ function ensureAlignerInstalled(bin, flags) {
   const spec =
     aligners.find((a) => a.id === "qwen3-q4" && !a.unsupported) ??
     aligners.find((a) => !a.unsupported);
-  if (!spec) return; // no aligner can run in this build (Intel mac) — engine timings it is
+  if (!spec) {
+    say(
+      "warning: no forced aligner can run in this build. Studio caption and cue timings are approximate; use a supported machine to align the recording.",
+    );
+    return;
+  }
   say(
     `Studio narration needs a forced aligner to keep slides in sync with ` +
       `the voice. Downloading ${spec.id} — a one-time ` +
@@ -2488,6 +2493,127 @@ function audioFiles(audioDir, slideKey) {
   };
 }
 
+/** Repair local sidecars only. Voice, speed and encoded audio are retained;
+ * publishing remains a separate, explicit command. */
+function cmdAlign(flags) {
+  if (typeof flags.align !== "string" || flags.align === "none") {
+    fail(
+      "align needs --align <installed-aligner>; approximate timings cannot repair sync.",
+    );
+  }
+  const htmlPath = path.resolve(flags.html ?? "index.html");
+  const audioDir = insideDir(
+    path.dirname(htmlPath),
+    flags["audio-dir"] ?? "audio",
+    "--audio-dir",
+  );
+  const plan = narrationPlan(fs.readFileSync(htmlPath, "utf8"));
+  const bin = requireTts();
+  // Check the complete input before loading any model or changing a sidecar.
+  const inputs = plan.map((slide) => {
+    const { mp3, sidecar } = audioFiles(audioDir, slide.slideKey);
+    const cached = JSON.parse(readInside(sidecar, "utf8"));
+    if (
+      !cached.voice ||
+      !Number.isFinite(cached.speed) ||
+      !readCached(
+        sidecar,
+        mp3,
+        slide.text,
+        { voice: cached.voice },
+        cached.speed,
+      )
+    ) {
+      fail(
+        `${slide.slideKey}: audio needs its original text, voice, speed and matching digest. Nothing was aligned.`,
+      );
+    }
+    return { slide, mp3, sidecar, cached };
+  });
+  const repaired = inputs.map(({ slide, mp3, sidecar, cached }) => {
+    say(`${slide.slideKey}: measuring existing audio with ${flags.align}…`);
+    const args = [
+      "align",
+      "--audio",
+      mp3,
+      "--text",
+      "-",
+      "--aligner",
+      flags.align,
+    ];
+    if (flags.device) args.push("--device", String(flags.device));
+    const result = JSON.parse(runTts(bin, args, { input: slide.text }));
+    const expected = stripPronunciation(slide.text)
+      .split(/\s+/)
+      .filter(Boolean);
+    let previousEnd = 0;
+    const valid =
+      Array.isArray(result.words) &&
+      result.words.length === expected.length &&
+      result.words.every((w, i) => {
+        const ok =
+          w.word === expected[i] &&
+          Number.isFinite(w.start) &&
+          Number.isFinite(w.end) &&
+          w.start >= previousEnd &&
+          w.end >= w.start &&
+          w.end * 1000 <= result.durationMs + 1;
+        previousEnd = w.end;
+        return ok;
+      });
+    if (
+      !valid ||
+      result.exact !== true ||
+      result.aligner !== flags.align ||
+      !Number.isSafeInteger(result.durationMs) ||
+      result.durationMs <= 0 ||
+      result.hash !== cached.result.hash ||
+      result.hash !== sha256File(mp3) ||
+      result.size !== fs.statSync(mp3).size ||
+      result.contentType !== "audio/mpeg"
+    ) {
+      fail(
+        `${slide.slideKey}: invalid alignment or changed audio. No sidecars were updated.`,
+      );
+    }
+    return { slide, mp3, sidecar, cached, result };
+  });
+  // Recheck all recordings after the slow model passes, before any writes.
+  for (const { mp3, result } of repaired) {
+    if (sha256File(mp3) !== result.hash)
+      fail("Audio changed during alignment; no sidecars were updated.");
+  }
+  for (const { sidecar, cached, result } of repaired) {
+    writeInside(
+      sidecar,
+      JSON.stringify(
+        { ...cached, result: { ...cached.result, ...result } },
+        null,
+        2,
+      ) + "\n",
+    );
+  }
+  say(
+    "Timing sidecars saved locally. A normal publish may carry forward old server timings. " +
+      "When publishing the repair is authorized, use publish --all --require-audio " +
+      "with the original --voice, --speed and presentation id.",
+  );
+  process.stdout.write(
+    JSON.stringify(
+      {
+        aligned: repaired.length,
+        published: false,
+        slides: repaired.map(({ slide, result }) => ({
+          slideKey: slide.slideKey,
+          ...result,
+        })),
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+}
+
 /** The manifest's own audio path for a slide — mirrors `audio/<slideKey>.mp3`. */
 function audioPathFor(slideKey) {
   return `audio/${slideKey}.mp3`;
@@ -2943,7 +3069,7 @@ async function cmdPublish(flags) {
       say(`carried forward: ${creation.reused.length} slide(s) of narration`);
       if (flags.all) {
         say(
-          `note: --all asked for every slide to be narrated again, and this ` +
+          `note: --all asked to refresh every slide's audio and timings, and this ` +
             `server still carried ${creation.reused.length} forward ` +
             `(${creation.reused.join(", ")}); it predates reuseAudio.`,
         );
@@ -3079,7 +3205,9 @@ async function cmdPublish(flags) {
   let stale;
   if (flags.all) {
     stale = plan.map((s) => s.slideKey);
-    say(`--all: synthesizing every narrated slide (${stale.length}).`);
+    say(
+      `--all: refreshing every narrated slide (${stale.length}) from local audio, synthesizing only missing recordings.`,
+    );
   } else {
     try {
       session = await api("/api/presentations/publish-narrated", {
@@ -4105,6 +4233,8 @@ const USAGE = `usage:
   node present.mjs narrate [--html index.html] (--voice <engine:voice> | --profile <account>) [--speed 1.0]
                            [--engine E] [--align A|none] [--device auto|cpu|gpu]
                            [--audio-dir audio]
+  node present.mjs align   [--html index.html] --align <installed-aligner>
+                           [--device auto|cpu|gpu] [--audio-dir audio]
   node present.mjs publish [--html index.html] [--voice <engine:voice>]
                            [--fallback-voice <engine:voice>]
                            [--title T] [--slug S] [--visibility unlisted|public|private]
@@ -4173,6 +4303,18 @@ nothing. Any narrated slide without audio for its current text, voice and
 speed stops the publish before anything is created, naming the slides. For a
 CI job that publishes a folder an earlier job narrated.
 
+align measures existing audio against the original script and updates only
+local timing sidecars. It needs matching cached audio from narrate or publish.
+It keeps the voice, speed and MP3 bytes, synthesizes nothing and publishes
+nothing. MP3 decoding requires ffmpeg; bisque-voice must support align.
+A normal publish can carry forward the server's old timings. When publishing
+the repair is authorized, rerun the original publish with --all --require-audio,
+the same presentation id, voice and speed. This sends the repaired sidecars
+and the unchanged recordings; a missing local recording stops the publish.
+
+--all refreshes every slide's audio and timings from matching local recordings,
+synthesizing only missing recordings. --require-audio forbids that synthesis.
+
 --org publishes into a company's library on bisque.team (members only by
 default); a repo can pin it with {"org": "<slug>"} in .bisque.json.
 
@@ -4202,6 +4344,8 @@ async function main() {
       return cmdPronunciationReport(flags);
     case "narrate":
       return cmdNarrate(flags);
+    case "align":
+      return cmdAlign(flags);
     case "publish":
       return cmdPublish(flags);
     case "resume":
