@@ -44,8 +44,13 @@ sections.forEach((sec, i) => {
     problems.push(`slide ${n}: no data-background`);
 });
 
+// Hyperlinks navigate on click; they do not load a render asset. Keep other
+// attributes (including inline CSS) and every resource element in the scan.
+const renderMarkup = s.replace(/<(?:a|area)\b[^>]*>/gi, (tag) =>
+  tag.replace(/\s+href\s*=\s*(["'])[\s\S]*?\1/gi, ""),
+);
 const net =
-  s.match(
+  renderMarkup.match(
     /(?:src|href)\s*=\s*["']https?:\/\/[^"']+["']|@import\s+(?:url\()?["']?https?:\/\/|url\(\s*["']?https?:\/\//gi,
   ) ?? [];
 for (const ref of net.slice(0, 5))
