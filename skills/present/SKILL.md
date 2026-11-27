@@ -223,7 +223,11 @@ is facts only — it flags nothing, and you judge every word:
 
 `inspectable: false` means the voice has no letters-to-sounds stage to read;
 the `reason` field says why. That is not a pass — tell the user no automated
-check ran for that voice. Markers still work there, judged by ear.
+check ran for that voice. With no report to say a word is wrong, you decide:
+mark every name whose spelling does not say its sound with a respelling
+(IPA does not reach these voices), and judge it by ear where you can. A cloned
+Qwen3 voice was transcribed saying `Bisque` as "Bisco" until the narration carried
+`[Bisque](bisk)`.
 
 When you publish, list the words you marked, in one line.
 
